@@ -14,6 +14,19 @@ def get_all_routes():
             return cursor.fetchall()
 
 
+def get_active_routes():
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("""
+                SELECT id, name, description, active
+                FROM routes
+                WHERE active = TRUE
+                ORDER BY name;
+            """)
+
+            return cursor.fetchall()
+
+
 def add_route(name, description=None):
     name = name.strip()
 
@@ -29,4 +42,3 @@ def add_route(name, description=None):
             """, (name, description))
 
             return cursor.fetchone()
-        

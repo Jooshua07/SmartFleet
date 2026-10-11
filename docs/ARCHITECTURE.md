@@ -4,12 +4,12 @@ Last updated: 2026-10-11
 
 ## Current architecture
 
-SmartFleet currently has a strong PostgreSQL schema and a minimal Python layer. The Streamlit interface has not been built yet.
+SmartFleet currently has a strong PostgreSQL schema and an initial Streamlit shell. The shell provides native page routing, shared UI helpers and real-data empty states. Most business write workflows remain planned.
 
 ```text
 User browser
-  -> Streamlit app (planned; app.py is currently empty)
-  -> Page scripts and reusable UI components (planned)
+  -> Streamlit app (`app.py`)
+  -> Page scripts and reusable UI components
   -> Services with business operations
   -> Database connection and transaction helpers
   -> PostgreSQL smartfleet database
@@ -18,10 +18,13 @@ User browser
 Current implemented modules:
 
 ```text
-app.py                         Empty Streamlit entrypoint
+app.py                         Streamlit entrypoint and router
+app_pages/                     Initial page scripts
+components/                    Shared UI helpers
+utils/                         Date, formatting and validation helpers
 database/connection.py          psycopg connection factory
 services/route_service.py       route list and create helpers
-services/bus_service.py         bus list helper
+services/bus_service.py         bus list and create helpers
 tests/                          ad hoc checks and pytest-style scripts
 migrations/                     canonical SQL schema history
 docs/                           database reference, UI references and project docs
@@ -57,10 +60,10 @@ The app should use Streamlit 1.65 APIs that are present in the local environment
 - `st.bottom`
 - `st.form`
 
-Recommended page organization:
+Implemented page organization:
 
 ```text
-app.py or streamlit_app.py      Main entrypoint and navigation
+app.py                         Main entrypoint and navigation
 app_pages/
   home.py
   buses.py
@@ -72,16 +75,14 @@ app_pages/
 components/
   layout.py
   cards.py
-  navigation.py
   forms.py
-  feedback.py
 utils/
   dates.py
   formatting.py
   validation.py
 ```
 
-The existing `pages/` directory is empty. Streamlit's current guidance favors explicit `st.navigation` with a non-legacy page folder such as `app_pages/` to avoid accidental legacy page auto-discovery. If the existing `pages/` directory is kept, it should remain intentionally unused or be renamed in a planned cleanup.
+The existing `pages/` directory is empty. Because `app.py` calls `st.navigation`, Streamlit ignores the legacy `pages/` directory.
 
 ## Service and business-logic layer
 
@@ -95,17 +96,18 @@ Services should:
 - Avoid direct Streamlit imports.
 - Treat PostgreSQL constraints and triggers as authoritative for final integrity.
 
-Examples of future service modules:
+Current and planned service modules:
 
 | Module | Responsibility |
 | --- | --- |
-| `services/bus_service.py` | Bus create/list/edit/activate/deactivate |
-| `services/route_service.py` | Route create/list/edit/activate/deactivate |
-| `services/driver_service.py` | Driver and employment records |
+| `services/bus_service.py` | Initial bus create/list helpers; edit/activate/deactivate still planned |
+| `services/route_service.py` | Initial route create/list helpers; edit/activate/deactivate still planned |
+| `services/driver_service.py` | Initial driver overview and available employment lookup |
 | `services/assignment_service.py` | Bus-driver assignment history and conflict checks |
 | `services/cashing_service.py` | Cashing, collections, remittances and expected amounts |
 | `services/expense_service.py` | Expense entry, allocation and ledger links |
-| `services/finance_service.py` | Period summaries and account balances |
+| `services/dashboard_service.py` | Dashboard summaries, status counts, performance and activity |
+| `services/finance_service.py` | Collection, expense and calculated account balance reads |
 | `services/reminder_service.py` | Due maintenance, deactivated buses and stored reminders |
 
 ## PostgreSQL data-access layer
@@ -174,7 +176,7 @@ Phone-first navigation target:
 - Buses page internal tabs: Buses, Routes, Drivers.
 - Finance page internal tabs: General, Collections, Expenses, Balances.
 
-Streamlit supports top/sidebar navigation natively. `st.bottom` exists in Streamlit 1.65 and may support bottom actions, but a full fixed bottom navigation must be verified in the browser and documented before relying on it. Avoid fragile CSS selectors tied to Streamlit internals.
+The current app uses hidden `st.navigation` plus a bottom action row rendered with `st.bottom`. This avoids legacy `pages/` auto-discovery and avoids fragile CSS selectors tied to Streamlit internals. Browser/mobile verification is still required before this is considered final.
 
 ## Configuration and environment
 
@@ -240,4 +242,3 @@ Hosted Streamlit app
 ```
 
 The database reference notes that the schema is usable if a future API and frontend replace Streamlit. That is a future architecture option, not the current implementation.
-

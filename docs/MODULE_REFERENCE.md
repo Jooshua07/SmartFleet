@@ -74,6 +74,207 @@ This reference covers significant code functions that exist today, plus the inst
   - Uses an inner join. This is compatible with the current schema because every bus must have a route.
   - Does not include assigned driver information.
 
+### `services.bus_service.get_buses_overview`
+
+- File: `services/bus_service.py`
+- Purpose: Return buses with route and date-aware active assignment context.
+- Parameters:
+  - `on_date`: optional date used for assignment validity.
+  - `search`: optional search text.
+  - `status`: optional `ACTIVE` or `INACTIVE` filter.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `buses`
+  - `routes`
+  - `driver_assignments`
+  - `driver_employments`
+  - `drivers`
+- Important validation: status filter is limited to known stored statuses.
+- Exceptions: psycopg/database exceptions.
+- Used by:
+  - Buses page.
+  - Record Cashing page.
+
+### `services.bus_service.create_bus`
+
+- File: `services/bus_service.py`
+- Purpose: Create a schema-supported bus record and optional initial permanent assignment.
+- Parameters:
+  - `registration_number`
+  - `route_id`
+  - `status`
+  - `date_acquired`
+  - `notes`
+  - `employment_id`
+- Returns: created bus row.
+- Database tables accessed:
+  - `buses`
+  - `driver_assignments` when `employment_id` is supplied.
+- Important validation:
+  - registration number is required and uppercased.
+  - status must be `ACTIVE` or `INACTIVE`.
+- Exceptions:
+  - `ValueError` for invalid input.
+  - database exceptions for uniqueness, foreign keys or assignment constraints.
+- Used by:
+  - Add Bus page.
+
+### `services.dashboard_service.get_financial_summary`
+
+- File: `services/dashboard_service.py`
+- Purpose: Return period revenue, expenses and pending remittance amounts.
+- Parameters: `start_date`, `end_date`.
+- Returns: dictionary with `revenue`, `expenses`, `pending_remittances`.
+- Database tables accessed:
+  - `remittances`
+  - `remittance_collections`
+  - `expenses`
+- Important validation: none.
+- Used by:
+  - Home page.
+  - Finance page.
+
+### `services.dashboard_service.get_bus_status_counts`
+
+- File: `services/dashboard_service.py`
+- Purpose: Count active and inactive buses.
+- Parameters: none.
+- Returns: dictionary with `ACTIVE`, `INACTIVE`, `TOTAL`.
+- Database tables accessed: `buses`.
+- Used by: Home page.
+
+### `services.dashboard_service.get_bus_performance`
+
+- File: `services/dashboard_service.py`
+- Purpose: Return bus-level revenue and bus-allocated expenses for a period.
+- Parameters: `start_date`, `end_date`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `buses`
+  - `remittances`
+  - `remittance_collections`
+  - `expenses`
+  - `expense_allocations`
+- Important validation: company-wide `GENERAL` expenses are not allocated to buses.
+- Used by: Home page.
+
+### `services.dashboard_service.get_recent_activity`
+
+- File: `services/dashboard_service.py`
+- Purpose: Return recent activity derived only from real domain records.
+- Parameters: `limit`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `remittance_collections`
+  - `expenses`
+  - `maintenance`
+- Used by:
+  - Home page.
+  - Finance page.
+
+### `services.driver_service.get_available_driver_employments`
+
+- File: `services/driver_service.py`
+- Purpose: Return active driver employments without active permanent assignments on a date.
+- Parameters: `on_date`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `drivers`
+  - `driver_employments`
+  - `driver_assignments`
+- Used by: Add Bus page.
+
+### `services.driver_service.get_drivers_overview`
+
+- File: `services/driver_service.py`
+- Purpose: Return driver, active employment and assigned bus summary rows.
+- Parameters: none.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `drivers`
+  - `driver_employments`
+  - `driver_assignments`
+  - `buses`
+- Used by: Buses page Drivers tab.
+
+### `services.finance_service.get_collections`
+
+- File: `services/finance_service.py`
+- Purpose: Return collection summaries for a period.
+- Parameters: `start_date`, `end_date`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `remittance_collections`
+  - `remittances`
+- Used by: Finance page Collections tab.
+
+### `services.finance_service.get_expenses`
+
+- File: `services/finance_service.py`
+- Purpose: Return expense ledger rows for a period.
+- Parameters: `start_date`, `end_date`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `expenses`
+  - `expense_categories`
+  - `buses`
+- Used by: Finance page Expenses tab.
+
+### `services.finance_service.get_account_balances`
+
+- File: `services/finance_service.py`
+- Purpose: Calculate account balances from opening balances and ledger directions.
+- Parameters: none.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `financial_accounts`
+  - `financial_transactions`
+- Used by: Finance page Balances tab.
+
+### `services.reminder_service.get_due_maintenance`
+
+- File: `services/reminder_service.py`
+- Purpose: Return active maintenance schedules due by a reference date plus day window.
+- Parameters: `reference_date`, `days`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `maintenance_schedules`
+  - `buses`
+- Used by: Reminders page.
+
+### `services.reminder_service.get_deactivated_buses`
+
+- File: `services/reminder_service.py`
+- Purpose: Return inactive buses for reminder display.
+- Parameters: none.
+- Returns: list of dictionary rows.
+- Database tables accessed: `buses`.
+- Used by: Reminders page.
+
+### `services.reminder_service.get_open_reminders`
+
+- File: `services/reminder_service.py`
+- Purpose: Return pending stored reminders, optionally limited.
+- Parameters: `limit`.
+- Returns: list of dictionary rows.
+- Database tables accessed: `reminders`.
+- Used by:
+  - Home page.
+  - Reminders page.
+
+### UI and utility helpers
+
+- `components.layout.render_app_header` renders the shared app header in `app.py`.
+- `components.layout.render_bottom_navigation` renders Home, Buses, Finance and More actions in `st.bottom`.
+- `components.layout.quick_action` renders navigation buttons in the More page.
+- `components.cards.empty_state` renders consistent empty-state callouts.
+- `components.cards.status_badge` renders status badges.
+- `utils.dates.today_lusaka` returns the business date in Africa/Lusaka.
+- `utils.dates.period_bounds` returns Week or Month reporting ranges.
+- `utils.formatting.format_kwacha` and `format_whole_kwacha` format Zambian Kwacha values.
+- `utils.formatting.format_date` formats dates for UI display.
+- `utils.validation.clean_required_text` and `parse_positive_amount` validate common inputs.
+
 ## Test and inspection scripts
 
 ### `tests.test_connection.test_database_connection`
@@ -166,16 +367,8 @@ The following modules are planned but do not exist yet:
 
 - `database/transactions.py`
 - `database/repositories.py` or table-specific data-access modules
-- `services/driver_service.py`
 - `services/assignment_service.py`
 - `services/cashing_service.py`
 - `services/expense_service.py`
-- `services/finance_service.py`
 - `services/maintenance_service.py`
-- `services/reminder_service.py`
-- `components/`
-- `utils/formatting.py`
-- `utils/dates.py`
-- `utils/validation.py`
-- Streamlit page modules
-
+- Streamlit browser/mobile verification tests

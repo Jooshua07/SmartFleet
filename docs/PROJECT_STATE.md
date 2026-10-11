@@ -5,13 +5,13 @@ Audit context: local development project, Africa/Lusaka business date context.
 
 ## Purpose
 
-SmartFleet is intended to become a phone-first fleet management system for a small bus transport business. The PostgreSQL database is the source of truth for buses, routes, drivers, cashing, collections, expenses, maintenance, payroll, accounts, transfers, loans and reminders. The Streamlit application is currently the planned user interface.
+SmartFleet is intended to become a phone-first fleet management system for a small bus transport business. The PostgreSQL database is the source of truth for buses, routes, drivers, cashing, collections, expenses, maintenance, payroll, accounts, transfers, loans and reminders. The Streamlit application is the user interface.
 
 This document records the actual state found during the initial audit. It does not describe a finished system.
 
 ## Current development stage
 
-The database foundation is substantially designed and migrated. The Python application layer is only a thin starting point. The Streamlit user interface has not yet been implemented.
+The database foundation is substantially designed and migrated. The Python application layer now includes the first Streamlit app shell, navigation foundation, shared UI helpers and real-data empty states. Core write workflows are still incomplete.
 
 ## Environment found
 
@@ -42,11 +42,31 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 - `database/connection.py`
   - Loads `.env`.
   - Creates a PostgreSQL connection with psycopg.
+- `app.py`
+  - Streamlit entrypoint using `st.navigation` with hidden native navigation and shared app framing.
+- `.streamlit/config.toml`
+  - Initial SmartFleet theme tokens.
+- `app_pages/`
+  - Initial Home, Buses, Finance, More, Add Bus, Record Cashing, Record Expense and Reminders pages.
+- `components/`
+  - Shared layout, card and form helpers.
+- `utils/`
+  - Date, formatting and validation helpers.
 - `services/route_service.py`
   - Lists routes.
   - Adds a route after trimming and validating the route name.
 - `services/bus_service.py`
   - Lists buses with their route names.
+  - Lists buses with route and assignment context.
+  - Creates schema-supported bus records with optional initial assignment.
+- `services/dashboard_service.py`
+  - Provides period financial summary, bus status counts, bus performance and recent activity helpers.
+- `services/driver_service.py`
+  - Provides driver overview and available employment lookup.
+- `services/finance_service.py`
+  - Provides collection, expense and calculated account balance helpers.
+- `services/reminder_service.py`
+  - Provides due maintenance, deactivated bus and open reminder helpers.
 - `tests/test_connection.py`
   - Ad hoc database connectivity check.
 - `tests/test_bus_service.py`
@@ -138,6 +158,10 @@ Result: pass.
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed because running the file by path cannot import `services` |
 | `.venv\Scripts\python.exe -m tests.test_connection` | Passed. Connected to database and found 28 tables |
 | `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed. Returned an empty bus list |
+| `.venv\Scripts\python.exe -m compileall app.py app_pages components services utils database` | Passed |
+| Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Add Bus, Record Cashing, Record Expense and Reminders |
+
+Note: the AppTest process printed a Windows temporary-folder cleanup warning after all page checks passed. The page checks themselves succeeded.
 
 ### Tests intentionally not executed
 
@@ -146,39 +170,35 @@ Result: pass.
 
 ## Planned
 
-Immediate planned work after baseline documentation:
+Immediate planned work after the initial app foundation:
 
-1. Establish the Streamlit app shell and navigation.
-2. Introduce shared UI helpers for phone-first cards, badges, lists, forms, skeletons and messages.
-3. Implement route and bus management.
-4. Implement an Add Bus workflow that only stores fields supported by the schema unless a schema migration is approved.
-5. Implement drivers, assignments and historical lookup.
-6. Implement Record Cashing with the existing remittance and collection model.
-7. Implement expenses, finance summaries, maintenance reminders and dashboard views from real PostgreSQL data.
-8. Add pytest-based unit and integration tests using an isolated test database.
-9. Add Streamlit `AppTest` coverage for UI behavior and browser/mobile checks where needed.
+1. Expand route and bus management beyond the initial list/create foundation.
+2. Implement driver registration, employment and assignment management.
+3. Implement Record Cashing with the existing remittance and collection model.
+4. Implement Record Expense with expense allocation and payment-source rules.
+5. Implement maintenance scheduling and reminders.
+6. Add pytest-based unit and integration tests using an isolated test database.
+7. Add browser/mobile verification for bottom navigation and narrow viewport behavior.
 
 ## Blocked or unresolved
 
 | Area | Blocker |
 | --- | --- |
 | `pytest` test suite | `pytest` is not installed and is not listed in `requirements.txt`. |
-| App entrypoint | `app.py` is empty. No Streamlit UI exists yet. |
-| Legacy pages folder | `pages/` exists but is empty. Streamlit 1.65 supports `st.navigation`; the planned app should avoid mixing old `pages/` auto-discovery with explicit navigation. |
+| Legacy pages folder | `pages/` exists but is empty. The app now uses explicit `st.navigation`, which causes Streamlit to ignore the legacy folder. |
 | Add Bus model and seating capacity | `buses` has no model or seating-capacity columns. Storing these requires an approved additive migration or removing those fields from the persisted MVP flow. |
 | Add Bus documents | No document metadata or file-storage tables exist. Upload persistence needs a design decision and likely a migration. |
 | `In Garage` bus status | `buses.status` allows only `ACTIVE` and `INACTIVE`. Garage state must come from maintenance/downtime rules or an approved new operational-status model. |
 | Recent Activity | No audit-log table exists. Initial activity can only be derived carefully from real domain records, not manufactured from unrelated timestamps. |
 | Document expiry reminders | The schema has generic `DOCUMENT_EXPIRY` reminders but no bus document table. Automatic expiry alerts need persisted document dates. |
 | Authentication and authorization | Not implemented. Public deployment is not safe until this is designed and enforced server-side. |
-| UI verification | No app exists to run. Mobile viewport verification is pending implementation. |
+| UI verification | Headless Streamlit checks passed. Browser/mobile viewport verification is still pending. |
 
 ## Known architectural risks
 
 - Current tests are ad hoc scripts, not a reliable automated suite.
-- Services use direct connections but do not yet define transaction-scoped business operations.
-- There is no repository/data-access layer beyond simple service functions.
+- Services use direct connections and simple transaction scopes. A dedicated transaction helper is still planned.
+- There is no repository/data-access layer beyond service-level SQL functions.
 - Financial operations must be implemented as atomic multi-table transactions. Writing one table at a time from UI handlers would bypass the intended integrity model.
 - Current bus listing uses an inner join to routes. That is valid because `buses.route_id` is required, but future lists may need driver and assignment joins that respect historical dates.
 - No application-level error handling, user-facing validation layer or duplicate-submit protection exists yet.
-

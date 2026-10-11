@@ -22,6 +22,10 @@ Current blockers:
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed: `ModuleNotFoundError: No module named 'services'` |
 | `.venv\Scripts\python.exe -m tests.test_connection` | Passed. Connected and printed 28 tables |
 | `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed. Returned 0 buses |
+| `.venv\Scripts\python.exe -m compileall app.py app_pages components services utils database` | Passed |
+| Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Add Bus, Record Cashing, Record Expense and Reminders |
+
+The AppTest command printed a Windows temporary-folder cleanup warning after all page checks passed. Treat this as a test-harness cleanup limitation unless it reappears as an app exception.
 
 ## Migration recreation check
 
@@ -172,4 +176,3 @@ For each phase, record:
 - tests skipped and why.
 - defects fixed.
 - unresolved limitations.
-

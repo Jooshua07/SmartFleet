@@ -6,7 +6,7 @@ This document records the approved phone-first design direction from `docs/ui-re
 
 ## Current UI state
 
-No Streamlit UI has been implemented yet. `app.py` is empty and `pages/` is empty.
+An initial Streamlit UI foundation has been implemented. `app.py` defines explicit navigation, `app_pages/` contains the first page scripts, and `components/` contains reusable layout/card/form helpers. The current UI is a functional foundation, not the final polished screenshot match.
 
 ## Design principles
 
@@ -61,7 +61,7 @@ Internal page tabs:
 - The selected primary item must be visually clear.
 - Bottom navigation must not cover forms or primary buttons.
 - On narrow screens, the navigation should keep labels short and touch targets comfortable.
-- The app should use supported Streamlit navigation APIs. `st.navigation` exists in Streamlit 1.65, but it supports top, sidebar and hidden positions. `st.bottom` also exists and may be useful for bottom actions. A fixed bottom navigation should be verified in browser tests before being treated as final.
+- The app uses supported Streamlit navigation APIs. `st.navigation` is configured with hidden native navigation, and a custom bottom action row is rendered with `st.bottom`. Browser/mobile verification is still required before treating it as final.
 - Avoid CSS selectors that depend on Streamlit's internal class names.
 - Do not create a separate inconsistent sidebar navigation unless it is the documented fallback.
 
@@ -92,7 +92,7 @@ Configure theme tokens through `.streamlit/config.toml` where possible. Use cust
 
 ## Components
 
-Shared components should be introduced for:
+Shared components should exist for:
 
 - App header.
 - Bottom or fallback navigation.
@@ -270,7 +270,9 @@ Differentiate:
 
 ### Add Bus wizard
 
-Three-step flow:
+The current implemented wizard is a schema-supported version of the required three-step flow. It explicitly warns that model, seating capacity and document upload persistence are not available yet.
+
+Target three-step flow:
 
 1. Basic information:
    - Registration Number.
@@ -339,4 +341,3 @@ Do not show fake operational data while loading.
 - Hidden tab content can still compute unless gated. Expensive tabs should be guarded by tab open state where supported.
 - UI screenshots include unsupported items such as In Garage, model, seating capacity, document details and fake data. These require schema/business decisions before implementation.
 - A production-grade mobile shell may need additional frontend technology in the future, but Streamlit remains the approved MVP stack for now.
-
