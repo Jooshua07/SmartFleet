@@ -179,6 +179,7 @@ else:
                 chassis_number=draft.get("chassis_number"),
                 document_records=document_records,
             )
+            st.cache_data.clear()
             st.session_state.add_bus_step = 1
             st.session_state.add_bus_draft = {}
             for document_type, _ in DOCUMENT_FIELDS:

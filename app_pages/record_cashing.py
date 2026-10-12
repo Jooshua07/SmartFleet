@@ -4,8 +4,8 @@ from components.cards import empty_state
 from services.bus_service import get_buses_overview
 from services.cashing_service import (
     delete_cashing_collection,
-    get_active_financial_accounts,
     get_cashing_collection,
+    get_collection_destination_account,
     get_recent_cashing_collections,
     record_direct_cashing_collection,
     update_direct_cashing_collection,
@@ -18,13 +18,6 @@ from utils.cashing_form import (
 )
 from utils.dates import today_lusaka
 from utils.formatting import format_date, format_whole_kwacha
-
-
-def _account_options(accounts: list[dict]) -> dict[str, int]:
-    return {
-        f"{account['name']} ({account['account_type']})": account["id"]
-        for account in accounts
-    }
 
 
 def _bus_options(buses: list[dict]) -> dict[str, dict]:
@@ -100,10 +93,9 @@ def _render_amount_fields(
     return normal_amounts, sunday_amounts, reasons
 
 
-def _render_direct_collection_form(today, buses: list[dict], accounts: list[dict]) -> None:
+def _render_direct_collection_form(today, buses: list[dict], account: dict) -> None:
     form_version = int(st.session_state.setdefault(CASHING_FORM_VERSION_KEY, 0))
     key_prefix = f"cash_direct_{form_version}"
-    account_options = _account_options(accounts)
     bus_options = _bus_options(buses)
 
     with st.container(border=True):
@@ -113,11 +105,8 @@ def _render_direct_collection_form(today, buses: list[dict], accounts: list[dict
             format="DD/MM/YYYY",
             key=f"{key_prefix}_date",
         )
-        selected_account = st.selectbox(
-            "Paid into",
-            list(account_options),
-            index=0,
-            key=f"{key_prefix}_account",
+        st.caption(
+            f"Paid into {account['name']} ({account['account_type'].replace('_', ' ').title()})"
         )
         selected_labels = st.multiselect(
             "Bus(es)",
@@ -169,10 +158,11 @@ def _render_direct_collection_form(today, buses: list[dict], accounts: list[dict
             )
             record_direct_cashing_collection(
                 collection_date=collection_date,
-                financial_account_id=account_options[selected_account],
+                financial_account_id=account["id"],
                 entries=entries,
                 notes=notes,
             )
+            st.cache_data.clear()
             clear_cashing_form_state(st.session_state)
             st.session_state.cashing_saved = True
             st.rerun()
@@ -180,20 +170,10 @@ def _render_direct_collection_form(today, buses: list[dict], accounts: list[dict
             st.error(f"Could not record cashing: {exc}", icon=":material/error:")
 
 
-def _render_edit_collection(collection_id: int, accounts: list[dict]) -> None:
+def _render_edit_collection(collection_id: int, account: dict) -> None:
     details = get_cashing_collection(collection_id)
     collection = details["collection"]
     entries = details["entries"]
-    account_options = _account_options(accounts)
-    account_labels = list(account_options)
-    selected_account_index = next(
-        (
-            index
-            for index, label in enumerate(account_labels)
-            if account_options[label] == collection["financial_account_id"]
-        ),
-        0,
-    )
 
     st.subheader("Edit cashing")
     with st.form(f"edit_cashing_form_{collection_id}"):
@@ -203,11 +183,8 @@ def _render_edit_collection(collection_id: int, accounts: list[dict]) -> None:
             format="DD/MM/YYYY",
             key=f"edit_cashing_date_{collection_id}",
         )
-        selected_account = st.selectbox(
-            "Paid into",
-            account_labels,
-            index=selected_account_index,
-            key=f"edit_cashing_account_{collection_id}",
+        st.caption(
+            f"Paid into {account['name']} ({account['account_type'].replace('_', ' ').title()})"
         )
         notes = st.text_area(
             "Collection notes",
@@ -259,10 +236,11 @@ def _render_edit_collection(collection_id: int, accounts: list[dict]) -> None:
             update_direct_cashing_collection(
                 collection_id=collection_id,
                 collection_date=collection_date,
-                financial_account_id=account_options[selected_account],
+                financial_account_id=account["id"],
                 entries=updated_entries,
                 notes=notes,
             )
+            st.cache_data.clear()
             st.session_state.pop("edit_cashing_id", None)
             st.session_state.cashing_saved = True
             st.rerun()
@@ -278,7 +256,11 @@ st.subheader("Record Cashing")
 
 today = today_lusaka()
 buses = get_buses_overview(today, status="ACTIVE")
-accounts = get_active_financial_accounts()
+try:
+    collection_account = get_collection_destination_account()
+except Exception as exc:
+    collection_account = None
+    account_error = str(exc)
 
 if not buses:
     empty_state(
@@ -286,10 +268,10 @@ if not buses:
         "Register an active bus before recording cashing.",
         ":material/directions_bus:",
     )
-elif not accounts:
+elif collection_account is None:
     empty_state(
-        "No active accounts",
-        "Add an active cash, Airtel Money or bank account before recording cashing.",
+        "No Airtel Money account",
+        account_error,
         ":material/account_balance:",
     )
 else:
@@ -299,11 +281,11 @@ else:
     edit_id = st.session_state.get("edit_cashing_id")
     if edit_id:
         try:
-            _render_edit_collection(edit_id, accounts)
+            _render_edit_collection(edit_id, collection_account)
         except Exception as exc:
             st.error(f"Could not load cashing: {exc}", icon=":material/error:")
     else:
-        _render_direct_collection_form(today, buses, accounts)
+        _render_direct_collection_form(today, buses, collection_account)
 
 recent = get_recent_cashing_collections(limit=14)
 if recent:
@@ -332,6 +314,7 @@ if recent:
                     ):
                         try:
                             delete_cashing_collection(collection["id"])
+                            st.cache_data.clear()
                             st.session_state.pop("delete_cashing_id", None)
                             st.success("Cashing deleted.", icon=":material/check_circle:")
                             st.rerun()

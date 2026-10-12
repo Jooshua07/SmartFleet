@@ -189,6 +189,7 @@ def _render_expense_form(
                 st.session_state.pop("edit_expense_id", None)
             else:
                 record_business_expense(**payload)
+            st.cache_data.clear()
             st.session_state.expense_saved = True
             st.rerun()
         except Exception as exc:
@@ -268,6 +269,7 @@ if recent:
                     ):
                         try:
                             delete_business_expense(expense["id"])
+                            st.cache_data.clear()
                             st.session_state.pop("delete_expense_id", None)
                             st.success("Expense deleted.", icon=":material/check_circle:")
                             st.rerun()

@@ -16,6 +16,7 @@ quick_action("Backups", "app_pages/backups.py", ":material/backup:")
 
 st.subheader("Management")
 quick_action("Accounts", "app_pages/accounts.py", ":material/account_balance:")
+quick_action("Business Presets", "app_pages/business_presets.py", ":material/tune:")
 
 st.subheader("Checks")
 warnings = get_data_validation_warnings()

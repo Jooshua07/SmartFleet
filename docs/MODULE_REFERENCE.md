@@ -1,6 +1,6 @@
 # SmartFleet module reference
 
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 
 This reference covers significant code functions that exist today, plus the installed PostgreSQL integrity functions that application services must respect. It should be updated after every implementation phase.
 
@@ -227,25 +227,37 @@ This reference covers significant code functions that exist today, plus the inst
   - monthly salary cannot be negative.
 - Used by: Buses page Drivers tab.
 
-### `services.cashing_service.get_active_cashing_rates`
+### `services.cashing_service.get_active_financial_accounts`
 
 - File: `services/cashing_service.py`
-- Purpose: Return active normal-day and Sunday cashing rates for a date.
+- Purpose: Return active financial accounts. This remains available for legacy/account views; new cashing entries use the Airtel Money preset destination.
+- Parameters: none.
+- Returns: list of account rows.
+- Database tables accessed: `financial_accounts`.
+- Used by: legacy helpers and future account selectors.
+
+### `services.cashing_service.get_collection_destination_account`
+
+- File: `services/cashing_service.py`
+- Purpose: Return the active Airtel Money account configured for cashing collections.
+- Parameters: none.
+- Returns: dictionary row with `id`, `name`, `account_type`.
+- Database tables accessed:
+  - `business_settings`
+  - `financial_accounts`
+- Important validation:
+  - raises `ValueError` if the configured collection account type has no active account.
+- Used by: Record Cashing page.
+
+### `services.cashing_service.get_cashing_rates_for_date`
+
+- File: `services/cashing_service.py`
+- Purpose: Return effective normal-day and Sunday cashing rates for a date.
 - Parameters: `on_date`.
 - Returns: dictionary keyed by `NORMAL_DAY` and `SUNDAY`.
 - Database tables accessed: `cashing_rates`.
 - Important validation:
-  - raises `ValueError` when either required rate is missing.
-- Used by: Record Cashing page and cashing write workflow.
-
-### `services.cashing_service.get_active_financial_accounts`
-
-- File: `services/cashing_service.py`
-- Purpose: Return active accounts that can receive cashing.
-- Parameters: none.
-- Returns: list of account rows.
-- Database tables accessed: `financial_accounts`.
-- Used by: Record Cashing page.
+  - raises `ValueError` if either rate is missing.
 
 ### `services.cashing_service.get_recent_cashing_collections`
 
@@ -259,10 +271,10 @@ This reference covers significant code functions that exist today, plus the inst
   - `remittances`
 - Used by: Record Cashing page.
 
-### `services.cashing_service.record_cashing_collection`
+### `services.cashing_service.record_direct_cashing_collection`
 
 - File: `services/cashing_service.py`
-- Purpose: Record one cashing collection, optional incoming ledger entry and one or more bus remittance rows in a single transaction.
+- Purpose: Record one direct cashing collection, matching incoming ledger entry and one or more bus remittance rows in a single transaction.
 - Parameters:
   - `collection_date`
   - `financial_account_id`
@@ -270,41 +282,54 @@ This reference covers significant code functions that exist today, plus the inst
   - `notes`
 - Returns: created collection row.
 - Database tables accessed:
-  - `cashing_rates`
   - `financial_accounts`
   - `financial_transactions`
   - `remittance_collections`
   - `remittances`
 - Important validation:
   - at least one bus entry must be included.
-  - actual amounts cannot be negative.
-  - day counts cannot be negative.
-  - variance from expected cashing requires an explanation.
-  - zero-total collections do not create zero-value ledger entries.
+  - every selected bus must have a positive direct amount.
+  - actual and Sunday amounts cannot be negative.
   - duplicate bus/date cashing entries are blocked before insert.
+  - the account must match the configured Airtel Money collection destination.
 - Used by: Record Cashing page.
 
-### `services.cashing_service.record_cashing_backfill`
+### `services.cashing_service.update_direct_cashing_collection`
 
 - File: `services/cashing_service.py`
-- Purpose: Record multiple cashing collection dates from the two-week backfill grid in one transaction.
+- Purpose: Replace an existing direct cashing collection and update its linked incoming ledger entry in one transaction.
 - Parameters:
+  - `collection_id`
+  - `collection_date`
   - `financial_account_id`
-  - `rows`
+  - `entries`
   - `notes`
-- Returns: list of created collection rows.
+- Returns: updated collection row.
 - Database tables accessed:
-  - `cashing_rates`
   - `financial_accounts`
   - `financial_transactions`
   - `remittance_collections`
   - `remittances`
 - Important validation:
-  - at least one row must be selected.
-  - each selected bus/date pair can appear only once.
-  - existing bus/date cashing records are blocked to prevent accidental duplicate backfill.
-  - actual amounts, day counts and variance explanations follow the same rules as single collection recording.
-- Used by: Record Cashing page two-week backfill mode.
+  - collection must exist.
+  - at least one bus entry must remain included.
+  - duplicate bus/date cashing entries are blocked, excluding the collection being edited.
+  - the account must match the configured Airtel Money collection destination.
+- Used by: Record Cashing page edit workflow.
+
+### `services.cashing_service.delete_cashing_collection`
+
+- File: `services/cashing_service.py`
+- Purpose: Delete a cashing collection, its remittance rows and its linked incoming ledger entry.
+- Parameters: `collection_id`.
+- Returns: none.
+- Database tables accessed:
+  - `financial_transactions`
+  - `remittance_collections`
+  - `remittances`
+- Important validation:
+  - collection must exist.
+- Used by: Record Cashing page delete workflow.
 
 ### `services.finance_service.get_collections`
 
@@ -339,6 +364,86 @@ This reference covers significant code functions that exist today, plus the inst
   - `financial_accounts`
   - `financial_transactions`
 - Used by: Finance page Balances tab.
+
+### `services.finance_service.get_business_balance`
+
+- File: `services/finance_service.py`
+- Purpose: Return consolidated Business Balance from ledger movement on or after the reporting baseline.
+- Parameters: none.
+- Returns: dictionary with baseline date, money in, money out, business balance, collections, operating payments, financing in and financing out.
+- Database tables accessed:
+  - `business_settings`
+  - `financial_transactions`
+- Important behavior:
+  - inbound transactions increase the balance.
+  - outbound transactions reduce the balance.
+  - the balance can be negative.
+  - loan repayments are classified as financing payments.
+- Used by: Finance page Balances tab.
+
+### `services.finance_service.get_business_ledger`
+
+- File: `services/finance_service.py`
+- Purpose: Return recent ledger rows with signed amounts and business classifications.
+- Parameters: `limit`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `business_settings`
+  - `financial_transactions`
+  - `financial_accounts`
+- Used by: Finance page Balances tab.
+
+### `services.preset_service`
+
+- File: `services/preset_service.py`
+- Purpose: Manage Business Presets without deleting historical data.
+- Main functions:
+  - `get_business_settings`
+  - `get_reporting_baseline_date`
+  - `set_reporting_baseline_date`
+  - `get_default_collection_account_type`
+  - `list_cashing_rates`
+  - `get_effective_cashing_rates`
+  - `set_cashing_rate`
+  - `list_cashing_schedule_rules`
+  - `list_driver_salary_presets`
+  - `set_driver_salary_preset`
+  - `list_reminder_presets`
+  - `set_reminder_preset`
+- Database tables accessed:
+  - `business_settings`
+  - `business_preset_audit`
+  - `cashing_rates`
+  - `cashing_schedule_rules`
+  - `driver_salary_presets`
+  - `reminder_presets`
+  - `drivers`
+- Important validation:
+  - rate and salary updates create new effective-dated rows and close the prior active window.
+  - overlapping active effective dates are rejected before database insert.
+  - preset changes are audited.
+- Used by: Business Presets page, Record Cashing page and Finance page.
+
+### `services.loan_service.record_unidentified_business_loan_repayment`
+
+- File: `services/loan_service.py`
+- Purpose: Record a business-account loan repayment even when the original loan record is not known yet.
+- Parameters:
+  - `repayment_date`
+  - `amount`
+  - `financial_account_id`
+  - `paid_to`
+  - `notes`
+- Returns: created loan repayment row.
+- Database tables accessed:
+  - `financial_accounts`
+  - `financial_transactions`
+  - `loan_repayments`
+- Important validation:
+  - amount must be positive.
+  - paid-to and notes are required.
+  - ledger transaction type is `LOAN_REPAYMENT` and direction is `OUT`.
+- Used by: future loan repayment UI.
 
 ### `services.expense_service.get_active_expense_categories`
 
@@ -459,44 +564,113 @@ This reference covers significant code functions that exist today, plus the inst
 ### `tests.test_connection.test_database_connection`
 
 - File: `tests/test_connection.py`
-- Purpose: Query public base tables and print their names.
+- Purpose: Query public base tables and assert the core SmartFleet tables exist.
 - Parameters: none.
 - Returns: none.
 - Database tables accessed: `information_schema.tables`.
-- Important validation: none.
+- Important validation:
+  - asserts that `buses`, `routes` and `financial_accounts` exist.
 - Exceptions: database connection/query failures.
-- Notes:
-  - Has no assertion beyond not raising an exception.
-  - Works when run as `python -m tests.test_connection`.
-  - Fails when run by path unless the project root is added to `PYTHONPATH`.
+- Notes: read-only database check.
 
 ### `tests.test_bus_service.test_get_all_buses`
 
 - File: `tests/test_bus_service.py`
-- Purpose: Call `get_all_buses`, assert the result is a list and print rows.
+- Purpose: Call `get_all_buses` and assert returned rows have the expected shape.
 - Parameters: none.
 - Returns: none.
 - Database tables accessed through service:
   - `buses`
   - `routes`
 - Important validation:
-  - Asserts returned object is a list.
+  - asserts returned object is a list.
+  - asserts each row contains `id`, `registration_number`, `route_name` and `status`.
 - Exceptions: service/database exceptions.
-- Notes:
-  - Works when run as `python -m tests.test_bus_service`.
-  - Fails when run by path unless the project root is added to `PYTHONPATH`.
+- Notes: read-only database check.
 
 ### `tests.test_route_service.test_route_service`
 
 - File: `tests/test_route_service.py`
-- Purpose: List current routes without changing database data.
+- Purpose: List current routes and assert returned rows have the expected shape.
 - Parameters: none.
 - Returns: none.
 - Database tables accessed through service:
   - `routes`
-- Important validation: none.
-- Safety note:
-  - Earlier versions of this script wrote test route data to the development database.
+- Important validation:
+  - asserts returned object is a list.
+  - asserts each row contains `id`, `name` and `active`.
+- Notes: read-only database check.
+
+### `tests.test_cashing_form`
+
+- File: `tests/test_cashing_form.py`
+- Purpose: Validate the direct cashing form helper used by the Record Cashing page.
+- Important validation:
+  - one-bus entries.
+  - multi-bus entries.
+  - missing bus selection.
+  - missing/zero amounts.
+  - form state clearing.
+
+### `tests.test_cashing_service`
+
+- File: `tests/test_cashing_service.py`
+- Purpose: Validate direct cashing service cleaning and duplicate-message helpers without writing database data.
+- Important validation:
+  - normal plus Sunday amount handling.
+  - zero and negative amount rejection.
+  - selected-row filtering.
+  - date coercion.
+  - Airtel Money collection destination selection.
+
+### `tests.test_financial_foundation`
+
+- File: `tests/test_financial_foundation.py`
+- Purpose: Validate Step 2 financial foundation behavior without live database writes.
+- Important validation:
+  - Business Balance can go negative.
+  - loan repayments are classified as financing payments.
+  - effective-dated cashing rate updates preserve the previous rate window.
+  - overlapping cashing-rate effective dates are rejected.
+  - unidentified loan repayments require notes.
+
+### `scripts.verify_migrations`
+
+- File: `scripts/verify_migrations.py`
+- Purpose: Create a disposable PostgreSQL database, apply all numbered migrations and drop the database afterward.
+- Parameters: none.
+- Returns: console output with the number of applied migrations.
+- Important validation:
+  - uses `.env` connection settings.
+  - targets a generated database name beginning with `smartfleet_verify_`.
+
+### `tests.test_record_cashing_page`
+
+- File: `tests/test_record_cashing_page.py`
+- Purpose: Use Streamlit AppTest to exercise the Record Cashing page with mocked bus/account data.
+- Important validation:
+  - page starts with one bus selector.
+  - one bus shows one amount input.
+  - multiple buses default to one common amount.
+  - multiple buses can switch to per-bus amount inputs.
+
+### `tests.test_dashboard_charts`
+
+- File: `tests/test_dashboard_charts.py`
+- Purpose: Validate bus revenue-vs-expense chart preparation.
+- Important validation:
+  - amounts remain on the correct Kwacha scale.
+  - chart y-axis starts from zero.
+
+### `tests.test_expense_service`
+
+- File: `tests/test_expense_service.py`
+- Purpose: Validate expense service input checks that run before database writes.
+- Important validation:
+  - positive amount required.
+  - description required.
+  - bus expenses require a bus.
+  - general expenses cannot be linked to one bus.
 
 ### `tests/inspect_buses.py`
 

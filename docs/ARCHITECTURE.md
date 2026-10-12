@@ -1,10 +1,10 @@
 # SmartFleet architecture
 
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 
 ## Current architecture
 
-SmartFleet currently has a strong PostgreSQL schema and an initial Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, single-day cashing and two-week cashing backfill. Most other business write workflows remain planned.
+SmartFleet currently has a strong PostgreSQL schema and a Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, a clean direct cashing form, expense entry/edit/delete, account management, backups, exports, Business Presets and a consolidated Business Balance view. Several advanced business write workflows remain planned.
 
 ```text
 User browser
@@ -26,8 +26,10 @@ database/connection.py          psycopg connection factory
 services/route_service.py       route list and create helpers
 services/bus_service.py         bus list/create helpers plus document metadata
 services/driver_service.py      driver list/create helpers and employment lookup
-services/cashing_service.py     cashing rates, collection summaries and writes
-tests/                          ad hoc checks and pytest-style scripts
+services/cashing_service.py     direct cashing collection summaries and writes
+services/preset_service.py      business settings, rates, salary and reminder presets
+services/loan_service.py        loan repayment classification helpers
+tests/                          unittest and Streamlit AppTest coverage
 migrations/                     canonical SQL schema history
 docs/                           database reference, UI references and project docs
 ```
@@ -106,11 +108,13 @@ Current and planned service modules:
 | `services/route_service.py` | Initial route create/list helpers; edit/activate/deactivate still planned |
 | `services/driver_service.py` | Initial driver create/overview helpers and available employment lookup |
 | `services/assignment_service.py` | Bus-driver assignment history and conflict checks |
-| `services/cashing_service.py` | Cashing, collections, remittances and expected amounts |
+| `services/cashing_service.py` | Direct cashing, Airtel Money collection destination, collections, remittances and ledger links |
 | `services/expense_service.py` | Expense entry, allocation and ledger links |
 | `services/dashboard_service.py` | Dashboard summaries, status counts, performance and activity |
-| `services/finance_service.py` | Collection, expense and calculated account balance reads |
+| `services/finance_service.py` | Collection, expense, consolidated Business Balance, business ledger and calculated account balance reads |
 | `services/reminder_service.py` | Due maintenance, document expiries, deactivated buses and stored reminders |
+| `services/preset_service.py` | Reporting baseline, cashing-rate history, cashing schedule, salary and reminder presets |
+| `services/loan_service.py` | Business loan repayment classification helpers |
 
 ## PostgreSQL data-access layer
 
@@ -150,26 +154,40 @@ Financial workflows must be written as atomic transactions because deferred trig
 The UI title must be `Record Cashing`. Internally, the flow should respect the existing remittance and collection model.
 
 ```text
-1. User selects today, single-day backfill or two-week backfill, then chooses receiving account and bus entries.
-2. UI asks the service for active rates and active receiving accounts.
+1. User selects a collection date and one or more buses. The receiving account is the active Airtel Money account from Business Presets.
+2. UI lets the user enter one common amount for multiple buses or separate amounts per bus.
 3. Service validates:
    - at least one bus entry is included
-   - actual amounts are not negative
-   - day counts are not negative
+   - every selected bus has a positive amount
+   - amounts are not negative
    - date is valid
-   - variance from expected cashing has a reason
-   - selected account and rates are active
+   - the Airtel Money collection account is active
    - duplicate bus/date cashing entries do not already exist
 4. Service starts one transaction.
-5. Service inserts an inbound `financial_transactions` row of type CASHING when the total is greater than zero.
+5. Service inserts an inbound `financial_transactions` row of type CASHING.
 6. Service inserts `remittance_collections` for the collection occasion.
 7. Service inserts one or more `remittances` rows linked to the bus and collection.
-8. PostgreSQL checks collection total, actual amount and variance explanation rules.
+8. PostgreSQL checks collection total and ledger integrity.
 9. Transaction commits.
 10. UI shows a success message and the recent cashing list reflects the new collection.
 ```
 
-Open decision: import from historical spreadsheet-style notes is not implemented yet. Current bulk support is an in-app two-week editable grid.
+Open decision: import from historical spreadsheet-style notes is not implemented yet.
+
+## Typical data flow: Business Balance
+
+The Finance > Balances page intentionally separates consolidated business position from individual account balances.
+
+```text
+1. Business Presets stores a reporting baseline date.
+2. Finance service reads all ledger rows on or after that date.
+3. Inbound ledger rows increase Business Balance.
+4. Outbound ledger rows reduce Business Balance.
+5. Loan repayments, owner loan repayments and owner drawings are classified as financing payments, not operating expenses.
+6. The resulting balance can be negative when recorded payouts exceed recorded inflows.
+```
+
+Account balances remain account-specific and still include each account opening balance plus ledger movement.
 
 ## Typical data flow: recording expenses
 
@@ -191,7 +209,7 @@ The UI title must be `Record Expense`. The first implemented flow supports busin
 9. UI shows a success message and recent expenses reflects the new record.
 ```
 
-Owner-personal expenses, multi-bus allocation, edit and delete remain planned.
+Owner-personal expenses and multi-bus allocation remain planned.
 
 ## Navigation and shared UI
 

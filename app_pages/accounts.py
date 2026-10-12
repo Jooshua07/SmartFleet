@@ -39,6 +39,7 @@ else:
             if submitted:
                 try:
                     update_opening_balance(account["id"], opening_balance)
+                    st.cache_data.clear()
                     st.session_state.account_saved = True
                     st.rerun()
                 except Exception as exc:

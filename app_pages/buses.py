@@ -9,6 +9,21 @@ from utils.dates import today_lusaka
 from utils.formatting import bus_status_label, format_date
 
 
+@st.cache_data(ttl=15, max_entries=64, show_spinner=False)
+def _load_buses(on_date, search, status):
+    return get_buses_overview(on_date, search=search, status=status)
+
+
+@st.cache_data(ttl=15, max_entries=16, show_spinner=False)
+def _load_routes():
+    return get_all_routes()
+
+
+@st.cache_data(ttl=15, max_entries=16, show_spinner=False)
+def _load_drivers():
+    return get_drivers_overview()
+
+
 with fixed_page_controls():
     selected_section = st.segmented_control(
         "Fleet section",
@@ -40,7 +55,7 @@ if selected_section == "Buses":
         buses = []
     else:
         db_status = {"Active": "ACTIVE", "Deactivated": "INACTIVE"}.get(status_filter)
-        buses = get_buses_overview(today_lusaka(), search=search, status=db_status)
+        buses = _load_buses(today_lusaka(), search, db_status)
 
     if buses:
         for bus in buses:
@@ -68,7 +83,7 @@ if selected_section == "Buses":
 
 elif selected_section == "Routes":
     st.subheader("Routes")
-    routes = get_all_routes()
+    routes = _load_routes()
     if routes:
         for route in routes:
             with st.container(border=True):
@@ -86,6 +101,7 @@ elif selected_section == "Routes":
     if submitted:
         try:
             add_route(route_name, route_description or None)
+            st.cache_data.clear()
             st.success("Route added.", icon=":material/check_circle:")
             st.rerun()
         except Exception as exc:
@@ -96,7 +112,7 @@ else:
     if st.session_state.pop("driver_saved", False):
         st.success("Driver added.", icon=":material/check_circle:")
 
-    drivers = get_drivers_overview()
+    drivers = _load_drivers()
     if drivers:
         for driver in drivers:
             with st.container(border=True):
@@ -128,6 +144,7 @@ else:
                     monthly_salary=monthly_salary,
                     notes=notes,
                 )
+                st.cache_data.clear()
                 st.session_state.driver_saved = True
                 st.rerun()
             except Exception as exc:

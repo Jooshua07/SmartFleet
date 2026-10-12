@@ -52,6 +52,12 @@ PAGES = [
         visibility="hidden",
     ),
     st.Page(
+        "app_pages/business_presets.py",
+        title="Business Presets",
+        icon=":material/tune:",
+        visibility="hidden",
+    ),
+    st.Page(
         "app_pages/reports.py",
         title="Reports",
         icon=":material/download:",

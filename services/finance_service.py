@@ -1,8 +1,10 @@
 from datetime import date
+from decimal import Decimal
 
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
+from services.preset_service import get_reporting_baseline_date
 
 
 def get_collections(start_date: date, end_date: date) -> list[dict]:
@@ -75,6 +77,86 @@ def get_account_balances() -> list[dict]:
                 GROUP BY fa.id
                 ORDER BY fa.id;
                 """
+            )
+            return cursor.fetchall()
+
+
+def get_business_balance() -> dict:
+    baseline_date = get_reporting_baseline_date()
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    COALESCE(SUM(CASE WHEN direction = 'IN' THEN amount ELSE 0 END), 0) AS money_in,
+                    COALESCE(SUM(CASE WHEN direction = 'OUT' THEN amount ELSE 0 END), 0) AS money_out,
+                    COALESCE(SUM(CASE WHEN transaction_type = 'CASHING' AND direction = 'IN' THEN amount ELSE 0 END), 0)
+                        AS collections,
+                    COALESCE(SUM(CASE WHEN transaction_type IN ('EXPENSE','DRIVER_SALARY','DRIVER_ADVANCE','OTHER')
+                                      AND direction = 'OUT' THEN amount ELSE 0 END), 0)
+                        AS operating_payments,
+                    COALESCE(SUM(CASE WHEN transaction_type IN ('OWNER_LOAN','LOAN_RECEIVED')
+                                      AND direction = 'IN' THEN amount ELSE 0 END), 0)
+                        AS financing_in,
+                    COALESCE(SUM(CASE WHEN transaction_type IN ('LOAN_REPAYMENT','OWNER_LOAN_REPAYMENT','OWNER_DRAWING')
+                                      AND direction = 'OUT' THEN amount ELSE 0 END), 0)
+                        AS financing_out
+                FROM financial_transactions
+                WHERE transaction_date >= %s;
+                """,
+                (baseline_date,),
+            )
+            summary = cursor.fetchone()
+
+    money_in = summary["money_in"] or Decimal("0")
+    money_out = summary["money_out"] or Decimal("0")
+    return {
+        "baseline_date": baseline_date,
+        "money_in": money_in,
+        "money_out": money_out,
+        "business_balance": money_in - money_out,
+        "collections": summary["collections"] or Decimal("0"),
+        "operating_payments": summary["operating_payments"] or Decimal("0"),
+        "financing_in": summary["financing_in"] or Decimal("0"),
+        "financing_out": summary["financing_out"] or Decimal("0"),
+    }
+
+
+def get_business_ledger(limit: int = 30) -> list[dict]:
+    baseline_date = get_reporting_baseline_date()
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    ft.id,
+                    ft.transaction_date,
+                    ft.transaction_type,
+                    ft.direction,
+                    ft.amount,
+                    CASE
+                        WHEN ft.direction = 'IN' THEN ft.amount
+                        ELSE -ft.amount
+                    END AS signed_amount,
+                    CASE
+                        WHEN ft.transaction_type = 'CASHING' THEN 'Collection'
+                        WHEN ft.transaction_type IN ('EXPENSE','DRIVER_SALARY','DRIVER_ADVANCE','OTHER') THEN 'Operating payment'
+                        WHEN ft.transaction_type IN ('OWNER_LOAN','LOAN_RECEIVED') THEN 'Financing received'
+                        WHEN ft.transaction_type IN ('LOAN_REPAYMENT','OWNER_LOAN_REPAYMENT','OWNER_DRAWING') THEN 'Financing payment'
+                        WHEN ft.transaction_type IN ('TRANSFER','TRANSFER_FEE') THEN 'Transfer'
+                        ELSE 'Other'
+                    END AS classification,
+                    ft.description,
+                    ft.notes,
+                    fa.name AS account_name,
+                    fa.account_type
+                FROM financial_transactions ft
+                JOIN financial_accounts fa ON fa.id = ft.account_id
+                WHERE ft.transaction_date >= %s
+                ORDER BY ft.transaction_date DESC, ft.id DESC
+                LIMIT %s;
+                """,
+                (baseline_date, limit),
             )
             return cursor.fetchall()
 

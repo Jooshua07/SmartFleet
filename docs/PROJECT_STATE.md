@@ -11,7 +11,7 @@ This document records the actual state found during the initial audit. It does n
 
 ## Current development stage
 
-The database foundation is substantially designed and migrated. The Python application layer now includes the first Streamlit app shell, navigation foundation, shared UI helpers, real-data empty states, fleet setup write workflows, single-day cashing, two-week cashing backfill, cashing edit/delete, expense entry/edit/delete, account opening-balance management, backups, exports and setup warnings. Several advanced financial write workflows are still incomplete.
+The database foundation is substantially designed and migrated. The Python application layer now includes the Streamlit app shell, navigation foundation, shared UI helpers, real-data empty states, fleet setup write workflows, direct cashing entry/edit/delete, expense entry/edit/delete, account opening-balance management, backups, exports, setup warnings, Business Presets and a consolidated Business Balance view. Several advanced financial write workflows are still incomplete.
 
 ## Environment found
 
@@ -24,6 +24,7 @@ The database foundation is substantially designed and migrated. The Python appli
 | python-dotenv | 1.2.4 |
 | pandas | 3.0.6 |
 | altair | 6.3.0 |
+| unittest | Built into Python; current baseline runner |
 | pytest | Not installed in `.venv`; also missing from `requirements.txt` |
 
 The `.env` file is present and contains the expected database keys: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER` and `DB_PASSWORD`. Values were not documented here.
@@ -65,9 +66,9 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
   - Provides driver overview and available employment lookup.
   - Creates drivers with an initial active employment record.
 - `services/finance_service.py`
-  - Provides collection, expense and calculated account balance helpers.
+  - Provides collection, expense, calculated account balance, consolidated Business Balance and business-ledger helpers.
 - `services/cashing_service.py`
-  - Provides cashing rates, active receiving accounts, recent collection summaries, single-day cashing recording, two-week backfill recording, collection editing and collection deletion.
+  - Provides Airtel Money collection-destination lookup, recent collection summaries, effective-dated cashing rate lookup, direct cashing recording, collection editing and collection deletion.
 - `services/expense_service.py`
   - Provides active expense categories, active payment accounts, recent expense summaries and business-account expense recording/editing/deletion.
 - `services/account_service.py`
@@ -80,16 +81,26 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
   - Provides setup and data warnings for Home and More.
 - `services/reminder_service.py`
   - Provides due maintenance, document expiry, deactivated bus and open reminder helpers.
+- `services/preset_service.py`
+  - Provides Business Presets for reporting baseline, Airtel collection destination, cashing rates, schedule rules, salary presets and reminder-warning days.
+- `services/loan_service.py`
+  - Provides a safe unidentified business-loan repayment workflow that records financing payments separately from operating expenses.
 - `tests/test_connection.py`
-  - Ad hoc database connectivity check.
+  - Read-only database connectivity and core-table check.
 - `tests/test_bus_service.py`
-  - Ad hoc bus retrieval check.
+  - Read-only bus retrieval shape check.
 - `tests/test_route_service.py`
-  - Ad hoc read-only route listing check.
+  - Read-only route listing shape check.
+- `tests/test_cashing_form.py`, `tests/test_cashing_service.py`, `tests/test_record_cashing_page.py`
+  - Direct cashing form, service validation and Streamlit page-state tests.
+- `tests/test_dashboard_charts.py`
+  - Chart scaling and zero-baseline checks.
+- `tests/test_expense_service.py`
+  - Expense validation checks before database writes.
 - `tests/inspect_buses.py`
   - Ad hoc schema inspection script for buses and routes.
 - `migrations/`
-  - Numbered SQL migrations `001` through `024`.
+  - Numbered SQL migrations `001` through `025`.
   - A corrected SQL integrity-test script.
 - `docs/SmartFleet_Database_Schema_V1_Technical_Reference.docx`
   - Existing source-derived database reference.
@@ -100,7 +111,7 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 
 ### Database
 
-The live `smartfleet` database exists and contains 29 public tables:
+The live `smartfleet` database exists and contains 33 public tables:
 
 | Area | Tables |
 | --- | --- |
@@ -111,6 +122,7 @@ The live `smartfleet` database exists and contains 29 public tables:
 | Owner and business loans | `owner_loans`, `owner_loan_transactions`, `business_loans`, `loan_repayments` |
 | Driver finance and payroll | `driver_advances`, `driver_deductions`, `driver_salaries`, `salary_advance_recoveries`, `salary_deduction_allocations` |
 | Maintenance and reminders | `maintenance`, `maintenance_schedules`, `reminders` |
+| Business presets | `business_settings`, `business_preset_audit`, `cashing_schedule_rules`, `driver_salary_presets`, `reminder_presets` |
 
 The database includes primary keys, foreign keys, uniqueness constraints, check constraints, partial unique indexes, deferred integrity triggers and timestamp triggers.
 
@@ -141,17 +153,21 @@ PostgreSQL functions currently installed:
 
 | Table | Row count | Notes |
 | --- | ---: | --- |
-| `routes` | 0 | No registered routes after removing leftover testing data |
-| `buses` | 0 | No registered buses |
-| `bus_documents` | 0 | No bus document metadata yet |
-| `drivers` | 0 | No registered drivers |
-| `driver_employments` | 0 | No employment records |
-| `driver_assignments` | 0 | No assignments |
+| `routes` | 2 | Registered business routes |
+| `buses` | 3 | Registered buses |
+| `bus_documents` | 6 | Bus document metadata |
+| `drivers` | 3 | Registered drivers |
+| `driver_employments` | 3 | Active employment records |
+| `driver_assignments` | 3 | Active bus assignments |
 | `financial_accounts` | 3 | Cash, Airtel Money, Bank |
 | `expense_categories` | 9 | Maintenance, Parts, Driver Salaries, Driver Advances, Transfer Fees, Loan Repayments, Owner Drawings, Office & Administration, Other |
 | `owner_loans` | 1 | Owner Loan Account |
 | `cashing_rates` | 2 | NORMAL_DAY K600, SUNDAY K300 |
 | `cashing_schedules` | 2 | Thursday and Sunday |
+| `business_settings` | 2 | Reporting baseline and Airtel collection destination |
+| `cashing_schedule_rules` | 2 | Thursday and Sunday collection coverage presets |
+| `driver_salary_presets` | 1 | Default monthly salary preset |
+| `reminder_presets` | 3 | Maintenance, document expiry and overdue cashing warning windows |
 | `transfer_fee_rules` | 15 | Airtel-to-Airtel and Airtel-to-Bank fee bands |
 | All operational transaction tables | 0 | No live cashing, expenses, payroll, maintenance, loan repayments or reminders |
 
@@ -159,7 +175,7 @@ PostgreSQL functions currently installed:
 
 ### Migration recreation
 
-A uniquely named temporary PostgreSQL database was created, all numbered migrations `001` through `024` were applied successfully, and the temporary database was dropped afterward.
+A uniquely named temporary PostgreSQL database was created, all numbered migrations `001` through `025` were applied successfully, and the temporary database was dropped afterward.
 
 Result: pass.
 
@@ -167,19 +183,20 @@ Result: pass.
 
 | Command | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Failed because `pytest` is not installed |
+| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 33 tests |
+| `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Historical failure because `pytest` is not installed |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed because running the file by path cannot import `database` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed because running the file by path cannot import `services` |
-| `.venv\Scripts\python.exe -m tests.test_connection` | Passed. Connected to database and found 29 tables |
-| `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed. Returned an empty bus list |
-| `.venv\Scripts\python.exe -m compileall app.py app_pages components services utils database` | Passed |
-| Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Add Bus, Record Cashing, Record Expense, Reminders, Backups, Accounts and Reports |
+| `.venv\Scripts\python.exe -m tests.test_connection` | Passed. Core database tables exist |
+| `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed. Bus rows have expected shape |
+| `.venv\Scripts\python.exe -m compileall app.py app_pages services components utils tests scripts` | Passed |
+| Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Record Cashing, Record Expense, Accounts, Business Presets, Backups, Reports and Reminders |
+| `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `025` to a disposable database and dropped it |
 | Disposable cashing smoke test | Passed. Created a temporary database, migrated through `023`, inserted one temporary route and bus, recorded a K1,800 cashing collection, verified collection/remittance totals, then dropped the database |
-| Disposable cashing backfill smoke test | Passed. Created a temporary database, migrated through `023`, inserted temporary route and buses, recorded two collection dates from backfill rows, verified collection/remittance/ledger totals and duplicate blocking, then dropped the database |
-| Temporary backfill UI AppTest | Passed no-crash check for Record Cashing two-week mode with a temporary route and bus |
+| Direct cashing disposable smoke test | Passed against `smartfleet_demo`; inserted, edited and deleted one future-dated test collection and verified no smoke rows remained |
 | Disposable expense smoke test | Passed. Created a temporary database, migrated through `023`, inserted a temporary route and bus, recorded one general expense and one bus expense, verified expense and ledger totals, then dropped the database |
 | Disposable edit/delete smoke test | Passed. Created a temporary database, migrated through `024`, verified opening balance update, expense edit/delete and cashing edit/delete, then dropped the database |
-| Backup service check | Passed. Created and verified `smartfleet_20261012_001847.dump` |
+| Backup service check | Passed. Created and verified `smartfleet_20261012_233219.dump` before applying migration `025` to the live database |
 
 Note: the AppTest process printed a Windows temporary-folder cleanup warning after all page checks passed. The page checks themselves succeeded.
 
@@ -197,14 +214,14 @@ Immediate planned work after the initial app foundation:
 3. Expand Record Cashing with optional import from spreadsheet-style notes.
 4. Expand Record Expense with owner-personal expenses and multi-bus allocation.
 5. Implement maintenance scheduling and reminders.
-6. Add pytest-based unit and integration tests using an isolated test database.
+6. Add isolated database integration tests for data-changing workflows.
 7. Add browser/mobile verification for bottom navigation and narrow viewport behavior.
 
 ## Blocked or unresolved
 
 | Area | Blocker |
 | --- | --- |
-| `pytest` test suite | `pytest` is not installed and is not listed in `requirements.txt`. |
+| Isolated database integration suite | Routine data-changing tests need a dedicated test database. |
 | Legacy pages folder | `pages/` exists but is empty. The app now uses explicit `st.navigation`, which causes Streamlit to ignore the legacy folder. |
 | Bus document uploads | Bus document metadata and expiry dates are stored, but uploaded file persistence is not designed yet. |
 | `In Garage` bus status | `buses.status` allows only `ACTIVE` and `INACTIVE`. Garage state must come from maintenance/downtime rules or an approved new operational-status model. |
@@ -215,7 +232,7 @@ Immediate planned work after the initial app foundation:
 
 ## Known architectural risks
 
-- Current tests are ad hoc scripts, not a reliable automated suite.
+- Current tests cover key unit/page cases, but data-changing integration coverage still needs an isolated database.
 - Services use direct connections and simple transaction scopes. A dedicated transaction helper is still planned.
 - There is no repository/data-access layer beyond service-level SQL functions.
 - Financial operations must be implemented as atomic multi-table transactions. Writing one table at a time from UI handlers would bypass the intended integrity model.
