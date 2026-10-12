@@ -4,7 +4,7 @@ Last updated: 2026-10-11
 
 ## Current architecture
 
-SmartFleet currently has a strong PostgreSQL schema and an initial Streamlit shell. The shell provides native page routing, shared UI helpers and real-data empty states. Most business write workflows remain planned.
+SmartFleet currently has a strong PostgreSQL schema and an initial Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, single-day cashing and two-week cashing backfill. Most other business write workflows remain planned.
 
 ```text
 User browser
@@ -24,7 +24,9 @@ components/                    Shared UI helpers
 utils/                         Date, formatting and validation helpers
 database/connection.py          psycopg connection factory
 services/route_service.py       route list and create helpers
-services/bus_service.py         bus list and create helpers
+services/bus_service.py         bus list/create helpers plus document metadata
+services/driver_service.py      driver list/create helpers and employment lookup
+services/cashing_service.py     cashing rates, collection summaries and writes
 tests/                          ad hoc checks and pytest-style scripts
 migrations/                     canonical SQL schema history
 docs/                           database reference, UI references and project docs
@@ -100,15 +102,15 @@ Current and planned service modules:
 
 | Module | Responsibility |
 | --- | --- |
-| `services/bus_service.py` | Initial bus create/list helpers; edit/activate/deactivate still planned |
+| `services/bus_service.py` | Initial bus create/list helpers and bus document metadata; edit/activate/deactivate still planned |
 | `services/route_service.py` | Initial route create/list helpers; edit/activate/deactivate still planned |
-| `services/driver_service.py` | Initial driver overview and available employment lookup |
+| `services/driver_service.py` | Initial driver create/overview helpers and available employment lookup |
 | `services/assignment_service.py` | Bus-driver assignment history and conflict checks |
 | `services/cashing_service.py` | Cashing, collections, remittances and expected amounts |
 | `services/expense_service.py` | Expense entry, allocation and ledger links |
 | `services/dashboard_service.py` | Dashboard summaries, status counts, performance and activity |
 | `services/finance_service.py` | Collection, expense and calculated account balance reads |
-| `services/reminder_service.py` | Due maintenance, deactivated buses and stored reminders |
+| `services/reminder_service.py` | Due maintenance, document expiries, deactivated buses and stored reminders |
 
 ## PostgreSQL data-access layer
 
@@ -148,24 +150,48 @@ Financial workflows must be written as atomic transactions because deferred trig
 The UI title must be `Record Cashing`. Internally, the flow should respect the existing remittance and collection model.
 
 ```text
-1. User selects bus, amount, date and optional notes.
-2. UI asks the service for the driver assigned to that bus on the selected date.
+1. User selects today, single-day backfill or two-week backfill, then chooses receiving account and bus entries.
+2. UI asks the service for active rates and active receiving accounts.
 3. Service validates:
-   - bus exists
-   - amount is not negative
+   - at least one bus entry is included
+   - actual amounts are not negative
+   - day counts are not negative
    - date is valid
-   - historical assignment lookup is date-aware
-   - selected account and rate assumptions are defined by business rules
+   - variance from expected cashing has a reason
+   - selected account and rates are active
+   - duplicate bus/date cashing entries do not already exist
 4. Service starts one transaction.
-5. Service inserts an inbound `financial_transactions` row of type CASHING.
+5. Service inserts an inbound `financial_transactions` row of type CASHING when the total is greater than zero.
 6. Service inserts `remittance_collections` for the collection occasion.
 7. Service inserts one or more `remittances` rows linked to the bus and collection.
 8. PostgreSQL checks collection total, actual amount and variance explanation rules.
 9. Transaction commits.
-10. UI shows a success message and disables duplicate submission for that completed attempt.
+10. UI shows a success message and the recent cashing list reflects the new collection.
 ```
 
-Open decision: the simplified UI captures only one amount. The service must decide whether that amount is a collection total, a bus-level remittance actual amount, or another documented business event. That decision must preserve the distinction between expected cashing and money actually received.
+Open decision: import from historical spreadsheet-style notes is not implemented yet. Current bulk support is an in-app two-week editable grid.
+
+## Typical data flow: recording expenses
+
+The UI title must be `Record Expense`. The first implemented flow supports business-account expenses.
+
+```text
+1. User selects expense date, category, payment account, scope, amount and description.
+2. UI asks the service for active categories, active payment accounts and active buses.
+3. Service validates:
+   - amount is greater than zero
+   - description is present
+   - category and payment account are active
+   - bus scope has a valid bus
+4. Service starts one transaction.
+5. Service inserts an outbound `financial_transactions` row of type EXPENSE.
+6. Service inserts the linked `expenses` row.
+7. PostgreSQL checks expense/ledger consistency.
+8. Transaction commits.
+9. UI shows a success message and recent expenses reflects the new record.
+```
+
+Owner-personal expenses, multi-bus allocation, edit and delete remain planned.
 
 ## Navigation and shared UI
 

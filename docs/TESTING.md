@@ -1,6 +1,6 @@
 # SmartFleet testing guide
 
-Last updated: 2026-10-11
+Last updated: 2026-10-12
 
 ## Current testing state
 
@@ -11,7 +11,7 @@ Current blockers:
 - `pytest` is not installed in `.venv`.
 - `pytest` is not listed in `requirements.txt`.
 - Running test files by path fails because project modules are not importable from the `tests/` directory.
-- `tests/test_route_service.py` writes to the development database.
+- `tests/test_route_service.py` is read-only after cleanup, but route creation still needs an isolated write test.
 
 ## Baseline commands executed during audit
 
@@ -20,16 +20,22 @@ Current blockers:
 | `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Failed: `No module named pytest` |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed: `ModuleNotFoundError: No module named 'database'` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed: `ModuleNotFoundError: No module named 'services'` |
-| `.venv\Scripts\python.exe -m tests.test_connection` | Passed. Connected and printed 28 tables |
-| `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed. Returned 0 buses |
+| `.venv\Scripts\python.exe -m tests.test_connection` | Passed after migration `023`. Connected and printed 29 tables |
+| `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed after migration `023`. Returned 0 buses |
 | `.venv\Scripts\python.exe -m compileall app.py app_pages components services utils database` | Passed |
-| Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Add Bus, Record Cashing, Record Expense and Reminders |
+| Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Add Bus, Record Cashing, Record Expense, Reminders, Backups, Accounts and Reports |
+| Disposable cashing smoke test | Passed. Temporary database migrated through `023`, one test bus was created, K1,800 cashing was recorded and verified, then the database was dropped |
+| Disposable cashing backfill smoke test | Passed. Temporary database migrated through `023`, two test buses were created, two collection dates were recorded from backfill rows, totals and duplicate blocking were verified, then the database was dropped |
+| Temporary backfill UI `AppTest` | Passed no-crash check for Record Cashing two-week mode with a temporary route and bus |
+| Disposable expense smoke test | Passed. Temporary database migrated through `023`, one general expense and one bus expense were recorded and verified against matching outbound ledger rows, then the database was dropped |
+| Disposable edit/delete smoke test | Passed. Temporary database migrated through `024`, opening balance update, expense edit/delete and cashing edit/delete were verified, then the database was dropped |
+| Backup service check | Passed. Created `smartfleet_20261012_001847.dump` and verified it with PostgreSQL restore-list output |
 
 The AppTest command printed a Windows temporary-folder cleanup warning after all page checks passed. Treat this as a test-harness cleanup limitation unless it reappears as an app exception.
 
 ## Migration recreation check
 
-A temporary database with a unique name was created. Migrations `001` through `022` were applied successfully, then the temporary database was dropped.
+A temporary database with a unique name was created. Migrations `001` through `024` were applied successfully, then the temporary database was dropped.
 
 Result: pass.
 
@@ -128,7 +134,6 @@ Use browser automation only for:
 
 | File | Reason |
 | --- | --- |
-| `tests/test_route_service.py` | Calls `add_route("Kitwe - Ndola")` and writes to the current database |
 | `migrations/smartfleet_integrity_tests_corrected.sql` | Intended for disposable database/rollback validation, not live-data execution |
 
 ## Required fixes before reliable pytest use

@@ -1,7 +1,12 @@
 import streamlit as st
 
 from components.cards import empty_state
-from services.reminder_service import get_deactivated_buses, get_due_maintenance, get_open_reminders
+from services.reminder_service import (
+    get_deactivated_buses,
+    get_document_expiries,
+    get_due_maintenance,
+    get_open_reminders,
+)
 from utils.dates import today_lusaka
 from utils.formatting import format_date
 
@@ -28,6 +33,18 @@ if deactivated:
 else:
     st.caption("No deactivated buses.")
 
+st.subheader("Document expiries")
+documents = get_document_expiries(today, days=30)
+if documents:
+    for document in documents:
+        with st.container(border=True):
+            st.markdown(f"**{document['registration_number']}**")
+            st.caption(f"{document['document_type']} due {format_date(document['expiry_date'])}")
+            if document["document_number"]:
+                st.caption(f"Reference: {document['document_number']}")
+else:
+    st.caption("No bus documents expiring in the next 30 days.")
+
 st.subheader("Stored reminders")
 reminders = get_open_reminders()
 if reminders:
@@ -39,4 +56,3 @@ if reminders:
                 st.write(reminder["description"])
 else:
     empty_state("No pending reminders", "Stored reminders will appear here.", ":material/notifications:")
-

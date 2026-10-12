@@ -1,21 +1,12 @@
-from services.route_service import get_all_routes, add_route
+from services.route_service import get_all_routes
 
 
 def test_route_service():
     routes = get_all_routes()
 
-    print(f"Routes before: {len(routes)}")
-
-    new_route = add_route(
-        name="Kitwe - Ndola",
-        description="Intercity route"
-    )
-
-    print("Created route:", new_route)
-
-    routes = get_all_routes()
-
-    print(f"Routes after: {len(routes)}")
+    print(f"Routes found: {len(routes)}")
+    for route in routes:
+        print(route)
 
 
 if __name__ == "__main__":

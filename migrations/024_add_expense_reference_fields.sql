@@ -1,0 +1,7 @@
+BEGIN;
+
+ALTER TABLE expenses
+    ADD COLUMN IF NOT EXISTS vendor_name TEXT,
+    ADD COLUMN IF NOT EXISTS reference_number VARCHAR(100);
+
+COMMIT;

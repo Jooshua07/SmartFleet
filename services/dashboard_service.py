@@ -116,6 +116,26 @@ def get_bus_performance(start_date: date, end_date: date) -> list[dict]:
             return cursor.fetchall()
 
 
+def get_activity_date_bounds() -> dict:
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    MIN(activity_date) AS earliest_date,
+                    MAX(activity_date) AS latest_date
+                FROM (
+                    SELECT collection_date AS activity_date
+                    FROM remittance_collections
+                    UNION ALL
+                    SELECT expense_date AS activity_date
+                    FROM expenses
+                ) activity;
+                """
+            )
+            return cursor.fetchone()
+
+
 def get_recent_activity(limit: int = 5) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:

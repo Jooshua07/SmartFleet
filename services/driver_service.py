@@ -3,6 +3,7 @@ from datetime import date
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
+from utils.validation import clean_optional_text, clean_required_text, parse_non_negative_amount
 
 
 def get_available_driver_employments(on_date: date) -> list[dict]:
@@ -61,3 +62,64 @@ def get_drivers_overview() -> list[dict]:
             )
             return cursor.fetchall()
 
+
+def create_driver(
+    full_name: str,
+    phone: str | None = None,
+    address: str | None = None,
+    next_of_kin_name: str | None = None,
+    next_of_kin_phone: str | None = None,
+    start_date: date | None = None,
+    monthly_salary=2000,
+    notes: str | None = None,
+) -> dict:
+    name = clean_required_text(full_name, "Driver name")
+    employment_start = start_date or date.today()
+    salary = parse_non_negative_amount(monthly_salary, "Monthly salary")
+
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                INSERT INTO drivers (
+                    full_name,
+                    phone,
+                    address,
+                    next_of_kin_name,
+                    next_of_kin_phone,
+                    notes
+                )
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, full_name, phone;
+                """,
+                (
+                    name,
+                    clean_optional_text(phone),
+                    clean_optional_text(address),
+                    clean_optional_text(next_of_kin_name),
+                    clean_optional_text(next_of_kin_phone),
+                    clean_optional_text(notes),
+                ),
+            )
+            driver = cursor.fetchone()
+
+            cursor.execute(
+                """
+                INSERT INTO driver_employments (
+                    driver_id,
+                    start_date,
+                    monthly_salary,
+                    status,
+                    notes
+                )
+                VALUES (%s, %s, %s, 'ACTIVE', %s);
+                """,
+                (
+                    driver["id"],
+                    employment_start,
+                    salary,
+                    "Employment created from Drivers page",
+                ),
+            )
+
+            return driver

@@ -30,3 +30,19 @@ def period_bounds(mode: str, day: date | None = None) -> tuple[date, date]:
         return month_bounds(day)
     return week_bounds(day)
 
+
+def subtract_months(day: date, months: int) -> date:
+    month_index = day.month - months
+    year = day.year
+    while month_index <= 0:
+        month_index += 12
+        year -= 1
+
+    month_lengths = [31, 29 if _is_leap_year(year) else 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    target_day = min(day.day, month_lengths[month_index - 1])
+    return day.replace(year=year, month=month_index, day=target_day)
+
+
+def _is_leap_year(year: int) -> bool:
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+

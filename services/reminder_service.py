@@ -43,6 +43,29 @@ def get_deactivated_buses() -> list[dict]:
             return cursor.fetchall()
 
 
+def get_document_expiries(reference_date: date, days: int = 30) -> list[dict]:
+    end_date = reference_date + timedelta(days=days)
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    bd.id,
+                    b.registration_number,
+                    bd.document_type,
+                    bd.document_number,
+                    bd.expiry_date
+                FROM bus_documents bd
+                JOIN buses b ON b.id = bd.bus_id
+                WHERE bd.expiry_date IS NOT NULL
+                  AND bd.expiry_date <= %s
+                ORDER BY bd.expiry_date, b.registration_number, bd.document_type;
+                """,
+                (end_date,),
+            )
+            return cursor.fetchall()
+
+
 def get_open_reminders(limit: int | None = None) -> list[dict]:
     limit_sql = "LIMIT %s" if limit else ""
     params = (limit,) if limit else ()
@@ -65,4 +88,3 @@ def get_open_reminders(limit: int | None = None) -> list[dict]:
                 params,
             )
             return cursor.fetchall()
-

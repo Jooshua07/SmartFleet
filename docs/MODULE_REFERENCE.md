@@ -61,7 +61,7 @@ This reference covers significant code functions that exist today, plus the inst
 - File: `services/bus_service.py`
 - Purpose: Return all buses with their route names.
 - Parameters: none.
-- Returns: list-like result of dictionary rows with `id`, `registration_number`, `route_name`, `status`, `date_acquired`, `notes`.
+- Returns: list-like result of dictionary rows with `id`, `registration_number`, `route_name`, `status`, `model`, `seating_capacity`, `chassis_number`, `date_acquired`, `notes`.
 - Database tables accessed:
   - `buses`
   - `routes`
@@ -77,7 +77,7 @@ This reference covers significant code functions that exist today, plus the inst
 ### `services.bus_service.get_buses_overview`
 
 - File: `services/bus_service.py`
-- Purpose: Return buses with route and date-aware active assignment context.
+- Purpose: Return buses with route, date-aware active assignment, bus-detail and document-expiry context.
 - Parameters:
   - `on_date`: optional date used for assignment validity.
   - `search`: optional search text.
@@ -89,6 +89,7 @@ This reference covers significant code functions that exist today, plus the inst
   - `driver_assignments`
   - `driver_employments`
   - `drivers`
+  - `bus_documents`
 - Important validation: status filter is limited to known stored statuses.
 - Exceptions: psycopg/database exceptions.
 - Used by:
@@ -98,7 +99,7 @@ This reference covers significant code functions that exist today, plus the inst
 ### `services.bus_service.create_bus`
 
 - File: `services/bus_service.py`
-- Purpose: Create a schema-supported bus record and optional initial permanent assignment.
+- Purpose: Create a bus record, optional bus document metadata and optional initial permanent assignment.
 - Parameters:
   - `registration_number`
   - `route_id`
@@ -106,13 +107,20 @@ This reference covers significant code functions that exist today, plus the inst
   - `date_acquired`
   - `notes`
   - `employment_id`
+  - `model`
+  - `seating_capacity`
+  - `chassis_number`
+  - `document_records`
 - Returns: created bus row.
 - Database tables accessed:
   - `buses`
   - `driver_assignments` when `employment_id` is supplied.
+  - `bus_documents` when document records are supplied.
 - Important validation:
   - registration number is required and uppercased.
   - status must be `ACTIVE` or `INACTIVE`.
+  - seating capacity, when provided, must be a positive whole number.
+  - document type must be supported.
 - Exceptions:
   - `ValueError` for invalid input.
   - database exceptions for uniqueness, foreign keys or assignment constraints.
@@ -197,6 +205,107 @@ This reference covers significant code functions that exist today, plus the inst
   - `buses`
 - Used by: Buses page Drivers tab.
 
+### `services.driver_service.create_driver`
+
+- File: `services/driver_service.py`
+- Purpose: Create a driver and an initial active employment record.
+- Parameters:
+  - `full_name`
+  - `phone`
+  - `address`
+  - `next_of_kin_name`
+  - `next_of_kin_phone`
+  - `start_date`
+  - `monthly_salary`
+  - `notes`
+- Returns: created driver row.
+- Database tables accessed:
+  - `drivers`
+  - `driver_employments`
+- Important validation:
+  - driver name is required.
+  - monthly salary cannot be negative.
+- Used by: Buses page Drivers tab.
+
+### `services.cashing_service.get_active_cashing_rates`
+
+- File: `services/cashing_service.py`
+- Purpose: Return active normal-day and Sunday cashing rates for a date.
+- Parameters: `on_date`.
+- Returns: dictionary keyed by `NORMAL_DAY` and `SUNDAY`.
+- Database tables accessed: `cashing_rates`.
+- Important validation:
+  - raises `ValueError` when either required rate is missing.
+- Used by: Record Cashing page and cashing write workflow.
+
+### `services.cashing_service.get_active_financial_accounts`
+
+- File: `services/cashing_service.py`
+- Purpose: Return active accounts that can receive cashing.
+- Parameters: none.
+- Returns: list of account rows.
+- Database tables accessed: `financial_accounts`.
+- Used by: Record Cashing page.
+
+### `services.cashing_service.get_recent_cashing_collections`
+
+- File: `services/cashing_service.py`
+- Purpose: Return recent cashing collection summaries.
+- Parameters: `limit`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `remittance_collections`
+  - `financial_accounts`
+  - `remittances`
+- Used by: Record Cashing page.
+
+### `services.cashing_service.record_cashing_collection`
+
+- File: `services/cashing_service.py`
+- Purpose: Record one cashing collection, optional incoming ledger entry and one or more bus remittance rows in a single transaction.
+- Parameters:
+  - `collection_date`
+  - `financial_account_id`
+  - `entries`
+  - `notes`
+- Returns: created collection row.
+- Database tables accessed:
+  - `cashing_rates`
+  - `financial_accounts`
+  - `financial_transactions`
+  - `remittance_collections`
+  - `remittances`
+- Important validation:
+  - at least one bus entry must be included.
+  - actual amounts cannot be negative.
+  - day counts cannot be negative.
+  - variance from expected cashing requires an explanation.
+  - zero-total collections do not create zero-value ledger entries.
+  - duplicate bus/date cashing entries are blocked before insert.
+- Used by: Record Cashing page.
+
+### `services.cashing_service.record_cashing_backfill`
+
+- File: `services/cashing_service.py`
+- Purpose: Record multiple cashing collection dates from the two-week backfill grid in one transaction.
+- Parameters:
+  - `financial_account_id`
+  - `rows`
+  - `notes`
+- Returns: list of created collection rows.
+- Database tables accessed:
+  - `cashing_rates`
+  - `financial_accounts`
+  - `financial_transactions`
+  - `remittance_collections`
+  - `remittances`
+- Important validation:
+  - at least one row must be selected.
+  - each selected bus/date pair can appear only once.
+  - existing bus/date cashing records are blocked to prevent accidental duplicate backfill.
+  - actual amounts, day counts and variance explanations follow the same rules as single collection recording.
+- Used by: Record Cashing page two-week backfill mode.
+
 ### `services.finance_service.get_collections`
 
 - File: `services/finance_service.py`
@@ -231,6 +340,65 @@ This reference covers significant code functions that exist today, plus the inst
   - `financial_transactions`
 - Used by: Finance page Balances tab.
 
+### `services.expense_service.get_active_expense_categories`
+
+- File: `services/expense_service.py`
+- Purpose: Return active expense categories for the Record Expense form.
+- Parameters: none.
+- Returns: list of category rows.
+- Database tables accessed: `expense_categories`.
+- Used by: Record Expense page.
+
+### `services.expense_service.get_active_payment_accounts`
+
+- File: `services/expense_service.py`
+- Purpose: Return active financial accounts that can pay business expenses.
+- Parameters: none.
+- Returns: list of account rows.
+- Database tables accessed: `financial_accounts`.
+- Used by: Record Expense page.
+
+### `services.expense_service.get_recent_expenses`
+
+- File: `services/expense_service.py`
+- Purpose: Return recent expense summaries.
+- Parameters: `limit`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `expenses`
+  - `expense_categories`
+  - `financial_accounts`
+  - `buses`
+- Used by: Record Expense page.
+
+### `services.expense_service.record_business_expense`
+
+- File: `services/expense_service.py`
+- Purpose: Record a business-account expense and matching outbound ledger entry in one transaction.
+- Parameters:
+  - `expense_date`
+  - `category_id`
+  - `amount`
+  - `description`
+  - `financial_account_id`
+  - `scope`
+  - `bus_id`
+  - `notes`
+- Returns: created expense row.
+- Database tables accessed:
+  - `expense_categories`
+  - `financial_accounts`
+  - `buses`
+  - `financial_transactions`
+  - `expenses`
+- Important validation:
+  - amount must be greater than zero.
+  - description is required.
+  - category and payment account must be active.
+  - bus scope requires a valid bus.
+  - only `GENERAL` and single `BUS` scope are supported today.
+- Used by: Record Expense page.
+
 ### `services.reminder_service.get_due_maintenance`
 
 - File: `services/reminder_service.py`
@@ -249,6 +417,17 @@ This reference covers significant code functions that exist today, plus the inst
 - Parameters: none.
 - Returns: list of dictionary rows.
 - Database tables accessed: `buses`.
+- Used by: Reminders page.
+
+### `services.reminder_service.get_document_expiries`
+
+- File: `services/reminder_service.py`
+- Purpose: Return bus document records expiring by a reference date plus day window.
+- Parameters: `reference_date`, `days`.
+- Returns: list of dictionary rows.
+- Database tables accessed:
+  - `bus_documents`
+  - `buses`
 - Used by: Reminders page.
 
 ### `services.reminder_service.get_open_reminders`
@@ -273,7 +452,7 @@ This reference covers significant code functions that exist today, plus the inst
 - `utils.dates.period_bounds` returns Week or Month reporting ranges.
 - `utils.formatting.format_kwacha` and `format_whole_kwacha` format Zambian Kwacha values.
 - `utils.formatting.format_date` formats dates for UI display.
-- `utils.validation.clean_required_text` and `parse_positive_amount` validate common inputs.
+- `utils.validation.clean_required_text`, `clean_optional_text`, `parse_optional_positive_int`, `parse_positive_amount` and `parse_non_negative_amount` validate common inputs.
 
 ## Test and inspection scripts
 
@@ -310,16 +489,14 @@ This reference covers significant code functions that exist today, plus the inst
 ### `tests.test_route_service.test_route_service`
 
 - File: `tests/test_route_service.py`
-- Purpose: List routes, create `Kitwe - Ndola`, then list routes again.
+- Purpose: List current routes without changing database data.
 - Parameters: none.
 - Returns: none.
 - Database tables accessed through service:
   - `routes`
-- Important validation: delegated to `add_route`.
-- Exceptions:
-  - may fail on duplicate route name because `routes.name` is unique.
+- Important validation: none.
 - Safety note:
-  - This is a data-changing script and should not run against the shared development database as a routine test.
+  - Earlier versions of this script wrote test route data to the development database.
 
 ### `tests/inspect_buses.py`
 
@@ -368,7 +545,5 @@ The following modules are planned but do not exist yet:
 - `database/transactions.py`
 - `database/repositories.py` or table-specific data-access modules
 - `services/assignment_service.py`
-- `services/cashing_service.py`
-- `services/expense_service.py`
 - `services/maintenance_service.py`
 - Streamlit browser/mobile verification tests

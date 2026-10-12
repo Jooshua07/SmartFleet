@@ -39,10 +39,28 @@ PAGES = [
         icon=":material/notifications:",
         visibility="hidden",
     ),
+    st.Page(
+        "app_pages/backups.py",
+        title="Backups",
+        icon=":material/backup:",
+        visibility="hidden",
+    ),
+    st.Page(
+        "app_pages/accounts.py",
+        title="Accounts",
+        icon=":material/account_balance:",
+        visibility="hidden",
+    ),
+    st.Page(
+        "app_pages/reports.py",
+        title="Reports",
+        icon=":material/download:",
+        visibility="hidden",
+    ),
 ]
 
 
 current_page = st.navigation(PAGES, position="hidden")
-render_app_header(current_page.title)
+render_app_header(current_page.title, has_fixed_controls=current_page.title in {"Buses", "Finance"})
 current_page.run()
 render_bottom_navigation(current_page.title)
