@@ -1,12 +1,16 @@
+import importlib
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
-from services.bus_service import get_bus_active_day_counts
+from services import bus_service
 from services.cashing_service import get_cashing_rates_for_date
 from utils.validation import clean_optional_text, clean_required_text, parse_non_negative_amount
+
+
+bus_service = importlib.reload(bus_service)
 
 
 DIFFERENCE_CLASSIFICATIONS = {
@@ -96,7 +100,7 @@ def _load_bus_rows(bus_ids: list[int]) -> list[dict]:
 def get_smart_cashing_preview(collection_date: date) -> dict:
     coverage = get_collection_coverage(collection_date)
     rates = get_cashing_rates_for_date(collection_date)
-    active_days = get_bus_active_day_counts(coverage["coverage_start"], coverage["coverage_end"])
+    active_days = bus_service.get_bus_active_day_counts(coverage["coverage_start"], coverage["coverage_end"])
     buses = _load_bus_rows(list(active_days))
 
     bus_rows = []
