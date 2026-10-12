@@ -1,10 +1,10 @@
 # SmartFleet architecture
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
 ## Current architecture
 
-SmartFleet currently has a strong PostgreSQL schema and a Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, a clean direct cashing form, expense entry/edit/delete, account management, backups, exports, Business Presets and a consolidated Business Balance view. Several advanced business write workflows remain planned.
+SmartFleet currently has a strong PostgreSQL schema and a Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, account management, backups, exports, Business Presets and a consolidated Business Balance view. Several advanced business write workflows remain planned.
 
 ```text
 User browser
@@ -27,6 +27,7 @@ services/route_service.py       route list and create helpers
 services/bus_service.py         bus list/create helpers plus document metadata
 services/driver_service.py      driver list/create helpers and employment lookup
 services/cashing_service.py     direct cashing collection summaries and writes
+services/smart_cashing_service.py expected cashing, allocations and obligations
 services/preset_service.py      business settings, rates, salary and reminder presets
 services/loan_service.py        loan repayment classification helpers
 tests/                          unittest and Streamlit AppTest coverage
@@ -104,11 +105,12 @@ Current and planned service modules:
 
 | Module | Responsibility |
 | --- | --- |
-| `services/bus_service.py` | Initial bus create/list helpers and bus document metadata; edit/activate/deactivate still planned |
+| `services/bus_service.py` | Bus create/list/edit helpers, bus document metadata, route history and effective-dated status history |
 | `services/route_service.py` | Initial route create/list helpers; edit/activate/deactivate still planned |
-| `services/driver_service.py` | Initial driver create/overview helpers and available employment lookup |
+| `services/driver_service.py` | Driver create/edit/overview helpers and available employment lookup |
 | `services/assignment_service.py` | Bus-driver assignment history and conflict checks |
 | `services/cashing_service.py` | Direct cashing, Airtel Money collection destination, collections, remittances and ledger links |
+| `services/smart_cashing_service.py` | Sunday/Thursday cashing coverage, expected cashing, standard/manual allocations, obligations and obligation repayments |
 | `services/expense_service.py` | Expense entry, allocation and ledger links |
 | `services/dashboard_service.py` | Dashboard summaries, status counts, performance and activity |
 | `services/finance_service.py` | Collection, expense, consolidated Business Balance, business ledger and calculated account balance reads |
@@ -155,21 +157,36 @@ The UI title must be `Record Cashing`. Internally, the flow should respect the e
 
 ```text
 1. User selects a collection date and one or more buses. The receiving account is the active Airtel Money account from Business Presets.
-2. UI lets the user enter one common amount for multiple buses or separate amounts per bus.
-3. Service validates:
+2. UI calculates the Sunday/Thursday coverage period and expected amount from effective-dated rates and bus status history.
+3. In Standard mode, the owner enters the actual received amount once and confirms the calculated allocation.
+4. In Adjust Buses mode, the owner can adjust days worked, Sunday work, per-bus allocation and difference classification.
+5. Service validates:
    - at least one bus entry is included
-   - every selected bus has a positive amount
    - amounts are not negative
-   - date is valid
+   - bus allocations plus explicit unallocated amount equal the actual receipt
    - the Airtel Money collection account is active
    - duplicate bus/date cashing entries do not already exist
-4. Service starts one transaction.
-5. Service inserts an inbound `financial_transactions` row of type CASHING.
-6. Service inserts `remittance_collections` for the collection occasion.
-7. Service inserts one or more `remittances` rows linked to the bus and collection.
-8. PostgreSQL checks collection total and ledger integrity.
-9. Transaction commits.
-10. UI shows a success message and the recent cashing list reflects the new collection.
+6. Service starts one transaction.
+7. Service inserts one inbound `financial_transactions` row of type CASHING for the actual receipt.
+8. Service inserts `remittance_collections` with coverage, expected total, unallocated amount and classification.
+9. Service inserts one or more `remittances` rows with allocation provenance and per-bus classification.
+10. Confirmed unpaid obligations are stored only when a responsible party is explicitly supplied.
+11. PostgreSQL checks collection total and ledger integrity.
+12. Transaction commits.
+13. UI shows a success message and the recent cashing list reflects the new collection.
+```
+
+Legacy direct cashing helpers still exist for edit compatibility, but new cashing entries use the smart flow.
+
+## Typical data flow: bus status changes
+
+```text
+1. User chooses Deactivate or Reactivate from the Buses page.
+2. User supplies an effective date and optional reason.
+3. Service closes the previous open `bus_status_history` row.
+4. Service inserts the new effective-dated status row.
+5. Service updates `buses.status` as the quick current status.
+6. Historical cashing eligibility counts active days from the history table, not only the current status.
 ```
 
 Open decision: import from historical spreadsheet-style notes is not implemented yet.

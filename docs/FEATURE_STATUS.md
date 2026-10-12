@@ -1,6 +1,6 @@
 # SmartFleet feature status
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
 Status legend:
 
@@ -11,21 +11,21 @@ Status legend:
 
 | Feature | Locations | State | Tests | Dependencies and blockers |
 | --- | --- | --- | --- | --- |
-| PostgreSQL schema | `migrations/001` through `migrations/025`, live `smartfleet` DB | Implemented | Temporary migration recreation passed through `025` | No migration tracking table exists |
+| PostgreSQL schema | `migrations/001` through `migrations/028`, live `smartfleet` DB | Implemented | Temporary migration recreation passed through `028` | No migration tracking table exists |
 | Database technical reference | `docs/SmartFleet_Database_Schema_V1_Technical_Reference.docx`, `.pdf` | Implemented | Source document inspected | Must not be overwritten casually |
 | Database connection | `database/connection.py` | Implemented | `python -m tests.test_connection` passed | Uses `.env`; no app-level secrets strategy yet |
 | Route listing | `services/route_service.py`, `app_pages/buses.py` | Implemented foundation | AppTest passed | Needs proper pytest test database |
 | Route creation | `services/route_service.py` | Implemented | Existing app form works through Buses > Routes | Needs isolated write tests before routine baseline use |
 | Bus listing | `services/bus_service.py`, `app_pages/buses.py` | Implemented foundation | `python -m tests.test_bus_service` and AppTest passed | Includes current assignment, model, seating and next document expiry context when records exist |
 | Add bus | `services/bus_service.py`, `app_pages/add_bus.py`, `migrations/023_add_bus_details_and_documents.sql` | Implemented foundation | AppTest passed | File uploads are not implemented; expiry metadata is stored |
-| Edit bus | none | Planned | none | Must preserve history and route relationships |
-| Activate/deactivate bus | none | Planned | none | Use `ACTIVE`/`INACTIVE`; deactivation date/reason not currently stored |
+| Edit bus | `app_pages/buses.py`, `services/bus_service.py`, `migrations/026_fleet_history_and_editing.sql` | Implemented foundation | Unit tests and AppTest passed | Document upload persistence is still planned |
+| Activate/deactivate bus | `app_pages/buses.py`, `services/bus_service.py`, `migrations/026_fleet_history_and_editing.sql` | Implemented foundation | Unit tests cover mid-period deactivation and reactivation day counts | Uses `ACTIVE`/`INACTIVE` with effective-dated history |
 | In Garage filter | none | Blocked | none | Requires approved definition, likely from maintenance/downtime rather than bus status |
 | Routes page | `app_pages/buses.py`, `services/route_service.py` | Implemented foundation | AppTest passed | Edit/deactivate route still planned |
-| Drivers page | `app_pages/buses.py`, `services/driver_service.py` | Implemented foundation | AppTest passed | Driver editing still planned |
+| Drivers page | `app_pages/buses.py`, `services/driver_service.py` | Implemented foundation | AppTest passed | Driver editing exists; employment history management still planned |
 | Driver registration | `app_pages/buses.py`, `services/driver_service.py` | Implemented foundation | AppTest passed | Creates an initial active employment record |
 | Driver assignment | `app_pages/add_bus.py`, `services/bus_service.py` | Implemented foundation | AppTest passed | Initial assignment is supported during Add Bus; reassignment management still planned |
-| Record Cashing | `app_pages/record_cashing.py`, `services/cashing_service.py`, `services/preset_service.py` | Implemented foundation | AppTest passed; unit tests cover one-bus, multi-bus, missing-value and form-clear cases | Supports one clean direct-entry form, one or many buses per submission, optional Sunday amount, edit and delete; collections are locked to Airtel Money |
+| Record Cashing | `app_pages/record_cashing.py`, `services/smart_cashing_service.py`, `services/cashing_service.py`, `services/preset_service.py` | Implemented smart foundation | AppTest passed; unit tests cover Sunday/Thursday coverage, K600/K300 calculations, unallocated shortages, surplus and adjust mode; disposable smart-cashing smoke passed | Supports expected cashing, standard allocations, Adjust Buses, Sunday toggles, unallocated differences and confirmed obligations; correction UI for settled obligations still needs expansion |
 | Collections view | `app_pages/finance.py`, `services/finance_service.py` | Implemented read-only foundation | AppTest passed | Detailed entry drill-down still planned |
 | Expense recording | `app_pages/record_expense.py`, `services/expense_service.py`, `migrations/024_add_expense_reference_fields.sql` | Implemented foundation | AppTest passed; disposable DB insert/edit/delete smoke tests passed | Supports business-account general expenses and bus expenses, paid-to, receipt/reference, edit and delete; owner-personal and multi-bus allocation still planned |
 | Expense ledger | `app_pages/finance.py`, `services/finance_service.py` | Implemented read-only foundation | AppTest passed | Search/filter/details still planned |
@@ -50,7 +50,7 @@ Status legend:
 | Bottom navigation | `components/layout.py` | Implemented foundation | AppTest passed | Need browser verification of `st.bottom` behavior |
 | Shared UI components | `components/` | Implemented foundation | compileall passed | More components needed as workflows expand |
 | Loading skeletons | `app_pages/home.py` | Implemented foundation | AppTest passed | Add skeletons to more data-heavy sections later |
-| Automated unittest suite | `tests/` | Implemented foundation | `.venv\Scripts\python.exe -m unittest discover -v` passed: 33 tests | Data-changing database tests still need a dedicated isolated test database |
+| Automated unittest suite | `tests/` | Implemented foundation | `.venv\Scripts\python.exe -m unittest discover -v` passed: 43 tests | Broader data-changing database tests still need a dedicated isolated test database |
 | Streamlit UI tests | ad hoc AppTest command | Implemented foundation | AppTest passed | Needs committed pytest/AppTest suite |
 | Authentication/authorization | none | Blocked/Planned | none | Business role decisions needed before public deployment |
 | Deployment docs | none | Planned | none | Not ready until app and security decisions exist |

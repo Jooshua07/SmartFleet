@@ -1,6 +1,6 @@
 # SmartFleet project state
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 Audit context: local development project, Africa/Lusaka business date context.
 
 ## Purpose
@@ -11,7 +11,7 @@ This document records the actual state found during the initial audit. It does n
 
 ## Current development stage
 
-The database foundation is substantially designed and migrated. The Python application layer now includes the Streamlit app shell, navigation foundation, shared UI helpers, real-data empty states, fleet setup write workflows, direct cashing entry/edit/delete, expense entry/edit/delete, account opening-balance management, backups, exports, setup warnings, Business Presets and a consolidated Business Balance view. Several advanced financial write workflows are still incomplete.
+The database foundation is substantially designed and migrated. The Python application layer now includes the Streamlit app shell, navigation foundation, shared UI helpers, real-data empty states, fleet setup write workflows, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, account opening-balance management, backups, exports, setup warnings, Business Presets and a consolidated Business Balance view. Several advanced financial write workflows are still incomplete.
 
 ## Environment found
 
@@ -60,15 +60,19 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
   - Lists buses with their route names.
   - Lists buses with route and assignment context.
   - Creates bus records with optional model, seating capacity, chassis number, document expiry metadata and initial assignment.
+  - Edits bus details and records effective-dated route/status history.
 - `services/dashboard_service.py`
   - Provides period financial summary, bus status counts, bus performance and recent activity helpers.
 - `services/driver_service.py`
   - Provides driver overview and available employment lookup.
   - Creates drivers with an initial active employment record.
+  - Edits driver profile fields without changing assignment history.
 - `services/finance_service.py`
   - Provides collection, expense, calculated account balance, consolidated Business Balance and business-ledger helpers.
 - `services/cashing_service.py`
-  - Provides Airtel Money collection-destination lookup, recent collection summaries, effective-dated cashing rate lookup, direct cashing recording, collection editing and collection deletion.
+  - Provides Airtel Money collection-destination lookup, recent collection summaries, effective-dated cashing rate lookup, legacy direct cashing compatibility, collection editing and guarded collection deletion.
+- `services/smart_cashing_service.py`
+  - Calculates Sunday/Thursday collection cycles, expected cashing, standard allocations, unallocated differences, smart cashing writes and obligation repayments.
 - `services/expense_service.py`
   - Provides active expense categories, active payment accounts, recent expense summaries and business-account expense recording/editing/deletion.
 - `services/account_service.py`
@@ -92,7 +96,9 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 - `tests/test_route_service.py`
   - Read-only route listing shape check.
 - `tests/test_cashing_form.py`, `tests/test_cashing_service.py`, `tests/test_record_cashing_page.py`
-  - Direct cashing form, service validation and Streamlit page-state tests.
+  - Cashing form helper, service validation and Streamlit page-state tests.
+- `tests/test_fleet_history.py`, `tests/test_smart_cashing_service.py`
+  - Effective-dated bus history and smart cashing calculation tests.
 - `tests/test_dashboard_charts.py`
   - Chart scaling and zero-baseline checks.
 - `tests/test_expense_service.py`
@@ -100,7 +106,7 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 - `tests/inspect_buses.py`
   - Ad hoc schema inspection script for buses and routes.
 - `migrations/`
-  - Numbered SQL migrations `001` through `025`.
+  - Numbered SQL migrations `001` through `028`.
   - A corrected SQL integrity-test script.
 - `docs/SmartFleet_Database_Schema_V1_Technical_Reference.docx`
   - Existing source-derived database reference.
@@ -111,14 +117,14 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 
 ### Database
 
-The live `smartfleet` database exists and contains 33 public tables:
+The live `smartfleet` database exists and contains 38 public tables:
 
 | Area | Tables |
 | --- | --- |
-| Fleet and people | `routes`, `buses`, `bus_documents`, `drivers`, `driver_employments`, `driver_assignments` |
+| Fleet and people | `routes`, `buses`, `bus_documents`, `bus_status_history`, `bus_route_history`, `drivers`, `driver_employments`, `driver_assignments` |
 | Accounts and money movement | `financial_accounts`, `financial_transactions`, `transfers`, `transfer_fee_rules` |
 | Expenses | `expense_categories`, `expenses`, `expense_allocations` |
-| Cashing and collections | `cashing_schedules`, `cashing_rates`, `remittance_collections`, `remittances` |
+| Cashing and collections | `cashing_schedules`, `cashing_rates`, `remittance_collections`, `remittances`, `cashing_obligations`, `cashing_obligation_payments` |
 | Owner and business loans | `owner_loans`, `owner_loan_transactions`, `business_loans`, `loan_repayments` |
 | Driver finance and payroll | `driver_advances`, `driver_deductions`, `driver_salaries`, `salary_advance_recoveries`, `salary_deduction_allocations` |
 | Maintenance and reminders | `maintenance`, `maintenance_schedules`, `reminders` |
@@ -159,10 +165,12 @@ PostgreSQL functions currently installed:
 | `drivers` | 3 | Registered drivers |
 | `driver_employments` | 3 | Active employment records |
 | `driver_assignments` | 3 | Active bus assignments |
+| `bus_status_history` | 3 | Current effective-dated bus status rows |
+| `bus_route_history` | 3 | Current effective-dated route rows |
 | `financial_accounts` | 3 | Cash, Airtel Money, Bank |
 | `expense_categories` | 9 | Maintenance, Parts, Driver Salaries, Driver Advances, Transfer Fees, Loan Repayments, Owner Drawings, Office & Administration, Other |
 | `owner_loans` | 1 | Owner Loan Account |
-| `cashing_rates` | 2 | NORMAL_DAY K600, SUNDAY K300 |
+| `cashing_rates` | 4 | NORMAL_DAY K600 and SUNDAY K300, with current and October baseline history |
 | `cashing_schedules` | 2 | Thursday and Sunday |
 | `business_settings` | 2 | Reporting baseline and Airtel collection destination |
 | `cashing_schedule_rules` | 2 | Thursday and Sunday collection coverage presets |
@@ -175,7 +183,7 @@ PostgreSQL functions currently installed:
 
 ### Migration recreation
 
-A uniquely named temporary PostgreSQL database was created, all numbered migrations `001` through `025` were applied successfully, and the temporary database was dropped afterward.
+A uniquely named temporary PostgreSQL database was created, all numbered migrations `001` through `028` were applied successfully, and the temporary database was dropped afterward.
 
 Result: pass.
 
@@ -183,7 +191,7 @@ Result: pass.
 
 | Command | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 33 tests |
+| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 43 tests |
 | `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Historical failure because `pytest` is not installed |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed because running the file by path cannot import `database` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed because running the file by path cannot import `services` |
@@ -191,12 +199,13 @@ Result: pass.
 | `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed. Bus rows have expected shape |
 | `.venv\Scripts\python.exe -m compileall app.py app_pages services components utils tests scripts` | Passed |
 | Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Record Cashing, Record Expense, Accounts, Business Presets, Backups, Reports and Reminders |
-| `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `025` to a disposable database and dropped it |
+| `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `028` to a disposable database and dropped it |
+| `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Created a disposable database, inserted one route and bus, recorded one K1,800 smart cashing collection and verified one matching ledger receipt |
 | Disposable cashing smoke test | Passed. Created a temporary database, migrated through `023`, inserted one temporary route and bus, recorded a K1,800 cashing collection, verified collection/remittance totals, then dropped the database |
 | Direct cashing disposable smoke test | Passed against `smartfleet_demo`; inserted, edited and deleted one future-dated test collection and verified no smoke rows remained |
 | Disposable expense smoke test | Passed. Created a temporary database, migrated through `023`, inserted a temporary route and bus, recorded one general expense and one bus expense, verified expense and ledger totals, then dropped the database |
 | Disposable edit/delete smoke test | Passed. Created a temporary database, migrated through `024`, verified opening balance update, expense edit/delete and cashing edit/delete, then dropped the database |
-| Backup service check | Passed. Created and verified `smartfleet_20261012_233219.dump` before applying migration `025` to the live database |
+| Backup service check | Passed. Created and verified `smartfleet_20261012_235450.dump` before applying migrations `026` and `027`, and `smartfleet_20261012_235728.dump` before applying migration `028` |
 
 Note: the AppTest process printed a Windows temporary-folder cleanup warning after all page checks passed. The page checks themselves succeeded.
 
@@ -209,8 +218,8 @@ Note: the AppTest process printed a Windows temporary-folder cleanup warning aft
 
 Immediate planned work after the initial app foundation:
 
-1. Add bus edit, deactivate/reactivate and route-change workflows.
-2. Expand driver employment and bus assignment management beyond initial setup.
+1. Expand driver employment and bus assignment management beyond initial setup.
+2. Add correction and settlement UI for existing cashing obligations.
 3. Expand Record Cashing with optional import from spreadsheet-style notes.
 4. Expand Record Expense with owner-personal expenses and multi-bus allocation.
 5. Implement maintenance scheduling and reminders.

@@ -1,6 +1,6 @@
 # SmartFleet module reference
 
-Last updated: 2026-10-12
+Last updated: 2026-10-13
 
 This reference covers significant code functions that exist today, plus the installed PostgreSQL integrity functions that application services must respect. It should be updated after every implementation phase.
 
@@ -96,6 +96,91 @@ This reference covers significant code functions that exist today, plus the inst
   - Buses page.
   - Record Cashing page.
 
+### `services.bus_service.get_bus_details`
+
+- File: `services/bus_service.py`
+- Purpose: Return one bus plus status history, route history and document metadata for edit/detail workflows.
+- Parameters: `bus_id`.
+- Returns: dictionary with `bus`, `status_history`, `route_history` and `documents`.
+- Database tables accessed:
+  - `buses`
+  - `routes`
+  - `bus_status_history`
+  - `bus_route_history`
+  - `bus_documents`
+- Important validation:
+  - raises `ValueError` if the bus does not exist.
+- Used by: Buses page edit workflow.
+
+### `services.bus_service.update_bus`
+
+- File: `services/bus_service.py`
+- Purpose: Edit bus identity/details and optionally record an effective-dated route change.
+- Parameters:
+  - `bus_id`
+  - `registration_number`
+  - `route_id`
+  - `route_effective_date`
+  - `model`
+  - `seating_capacity`
+  - `chassis_number`
+  - `date_acquired`
+  - `notes`
+- Returns: updated bus row.
+- Database tables accessed:
+  - `buses`
+  - `routes`
+  - `bus_route_history`
+- Important validation:
+  - registration number is required and uppercased.
+  - route must exist.
+  - route changes require an effective date.
+  - seating capacity, when provided, must be a positive whole number.
+- Used by: Buses page edit workflow.
+
+### `services.bus_service.set_bus_status`
+
+- File: `services/bus_service.py`
+- Purpose: Deactivate or reactivate a bus using an effective-dated status history row.
+- Parameters:
+  - `bus_id`
+  - `status`
+  - `effective_date`
+  - `reason`
+- Returns: updated bus row.
+- Database tables accessed:
+  - `buses`
+  - `bus_status_history`
+- Important validation:
+  - status must be `ACTIVE` or `INACTIVE`.
+  - effective date is required.
+  - avoids duplicate same-day same-status history rows.
+- Used by: Buses page status workflow and smart cashing history calculations.
+
+### `services.bus_service.count_active_days_from_history`
+
+- File: `services/bus_service.py`
+- Purpose: Pure helper that counts active days in an inclusive date range from status-history rows.
+- Parameters: `history_rows`, `start_date`, `end_date`.
+- Returns: integer active-day count.
+- Important validation:
+  - end date must be on or after start date.
+- Used by: fleet-history tests and smart cashing expectations.
+
+### `services.bus_service.get_bus_active_day_counts`
+
+- File: `services/bus_service.py`
+- Purpose: Return active-day counts per bus for an inclusive period using `bus_status_history`.
+- Parameters:
+  - `start_date`
+  - `end_date`
+  - optional `bus_ids`
+- Returns: dictionary keyed by bus id.
+- Database tables accessed:
+  - `buses`
+  - `bus_status_history`
+- Used by: `services.smart_cashing_service.get_smart_cashing_preview`.
+
 ### `services.bus_service.create_bus`
 
 - File: `services/bus_service.py`
@@ -114,6 +199,8 @@ This reference covers significant code functions that exist today, plus the inst
 - Returns: created bus row.
 - Database tables accessed:
   - `buses`
+  - `bus_status_history`
+  - `bus_route_history`
   - `driver_assignments` when `employment_id` is supplied.
   - `bus_documents` when document records are supplied.
 - Important validation:
@@ -205,6 +292,17 @@ This reference covers significant code functions that exist today, plus the inst
   - `buses`
 - Used by: Buses page Drivers tab.
 
+### `services.driver_service.get_driver`
+
+- File: `services/driver_service.py`
+- Purpose: Return one driver record for editing.
+- Parameters: `driver_id`.
+- Returns: driver dictionary row.
+- Database tables accessed: `drivers`.
+- Important validation:
+  - raises `ValueError` if the driver does not exist.
+- Used by: Buses page Drivers tab.
+
 ### `services.driver_service.create_driver`
 
 - File: `services/driver_service.py`
@@ -225,6 +323,25 @@ This reference covers significant code functions that exist today, plus the inst
 - Important validation:
   - driver name is required.
   - monthly salary cannot be negative.
+- Used by: Buses page Drivers tab.
+
+### `services.driver_service.update_driver`
+
+- File: `services/driver_service.py`
+- Purpose: Edit driver profile/contact fields.
+- Parameters:
+  - `driver_id`
+  - `full_name`
+  - `phone`
+  - `address`
+  - `next_of_kin_name`
+  - `next_of_kin_phone`
+  - `notes`
+- Returns: updated driver row.
+- Database tables accessed: `drivers`.
+- Important validation:
+  - driver name is required.
+  - driver must exist.
 - Used by: Buses page Drivers tab.
 
 ### `services.cashing_service.get_active_financial_accounts`
@@ -258,6 +375,95 @@ This reference covers significant code functions that exist today, plus the inst
 - Database tables accessed: `cashing_rates`.
 - Important validation:
   - raises `ValueError` if either rate is missing.
+
+### `services.smart_cashing_service.get_collection_coverage`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Convert a Sunday or Thursday collection date into the period that cashing should cover.
+- Parameters: `collection_date`.
+- Returns: dictionary with `collection_type`, `coverage_start`, `coverage_end` and optional `previous_sunday`.
+- Important validation:
+  - only Sunday and Thursday collection dates are accepted.
+
+### `services.smart_cashing_service.get_smart_cashing_preview`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Build the Record Cashing preview from coverage, effective rates and bus active-day history.
+- Parameters: `collection_date`.
+- Returns: dictionary containing coverage, rates, eligible buses and expected total.
+- Database tables accessed:
+  - `cashing_rates`
+  - `bus_status_history`
+  - `buses`
+  - `routes`
+  - `driver_assignments`
+  - `driver_employments`
+  - `drivers`
+- Used by: Record Cashing page.
+
+### `services.smart_cashing_service.build_standard_allocations`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Build expected per-bus allocations from the preview when the owner enters one actual received amount.
+- Parameters:
+  - `preview`
+  - `selected_bus_ids`
+  - `sunday_bus_ids`
+  - `total_received`
+  - optional `difference_classification`
+- Returns: dictionary with `entries`, `expected_total`, `unallocated_amount` and `difference_classification`.
+- Important validation:
+  - at least one eligible bus must be selected.
+  - actual received amount cannot be negative.
+  - negative differences remain explicit unallocated shortages instead of being silently split across buses.
+
+### `services.smart_cashing_service.record_smart_cashing_collection`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Record one smart cashing receipt, expected allocations, optional unallocated difference and confirmed unpaid obligations in one transaction.
+- Parameters:
+  - `collection_date`
+  - `financial_account_id`
+  - `total_received`
+  - `entries`
+  - `unallocated_amount`
+  - `difference_classification`
+  - `cashing_mode`
+  - `notes`
+- Returns: created collection row.
+- Database tables accessed:
+  - `financial_accounts`
+  - `financial_transactions`
+  - `remittance_collections`
+  - `remittances`
+  - `cashing_obligations`
+- Important validation:
+  - cashing must be paid into Airtel Money.
+  - at least one bus entry is required.
+  - allocations plus unallocated amount must equal the actual receipt.
+  - duplicate bus/date cashing rows are blocked.
+  - confirmed unpaid obligations require a responsible party.
+- Used by: Record Cashing page.
+
+### `services.smart_cashing_service.record_obligation_payment`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Record a later payment against a confirmed cashing obligation.
+- Parameters:
+  - `obligation_id`
+  - `payment_date`
+  - `amount`
+  - `financial_account_id`
+  - `notes`
+- Returns: created obligation-payment row.
+- Database tables accessed:
+  - `cashing_obligations`
+  - `financial_accounts`
+  - `financial_transactions`
+  - `cashing_obligation_payments`
+- Important validation:
+  - payment cannot exceed the outstanding amount.
+  - payment must be paid into Airtel Money.
 
 ### `services.cashing_service.get_recent_cashing_collections`
 
@@ -327,8 +533,10 @@ This reference covers significant code functions that exist today, plus the inst
   - `financial_transactions`
   - `remittance_collections`
   - `remittances`
+  - `cashing_obligations`
 - Important validation:
   - collection must exist.
+  - collections with active cashing obligations are not deleted.
 - Used by: Record Cashing page delete workflow.
 
 ### `services.finance_service.get_collections`
@@ -588,6 +796,16 @@ This reference covers significant code functions that exist today, plus the inst
 - Exceptions: service/database exceptions.
 - Notes: read-only database check.
 
+### `tests.test_fleet_history`
+
+- File: `tests/test_fleet_history.py`
+- Purpose: Validate fleet edit/status-history behavior without live database writes.
+- Important validation:
+  - mid-period deactivation reduces active-day counts.
+  - reactivation restores later active-day counts.
+  - invalid status is rejected.
+  - bus route changes require an effective date.
+
 ### `tests.test_route_service.test_route_service`
 
 - File: `tests/test_route_service.py`
@@ -623,6 +841,18 @@ This reference covers significant code functions that exist today, plus the inst
   - date coercion.
   - Airtel Money collection destination selection.
 
+### `tests.test_smart_cashing_service`
+
+- File: `tests/test_smart_cashing_service.py`
+- Purpose: Validate smart cashing calculations and validation without live database writes.
+- Important validation:
+  - Sunday collections cover Thursday through Saturday.
+  - Thursday collections cover Monday through Wednesday plus an optional previous Sunday.
+  - standard allocations use K600 normal-day and K300 Sunday expectations.
+  - shortages stay explicit as unallocated negative amounts.
+  - surplus classification is automatic.
+  - unsupported shortage classification is rejected.
+
 ### `tests.test_financial_foundation`
 
 - File: `tests/test_financial_foundation.py`
@@ -644,15 +874,27 @@ This reference covers significant code functions that exist today, plus the inst
   - uses `.env` connection settings.
   - targets a generated database name beginning with `smartfleet_verify_`.
 
+### `scripts.smoke_smart_cashing`
+
+- File: `scripts/smoke_smart_cashing.py`
+- Purpose: Run a disposable end-to-end smart cashing smoke check.
+- Important validation:
+  - creates a temporary PostgreSQL database.
+  - applies all numbered migrations.
+  - inserts one route and bus.
+  - records one K1,800 smart cashing collection.
+  - verifies one matching inbound `CASHING` ledger receipt.
+  - drops the temporary database.
+
 ### `tests.test_record_cashing_page`
 
 - File: `tests/test_record_cashing_page.py`
 - Purpose: Use Streamlit AppTest to exercise the Record Cashing page with mocked bus/account data.
 - Important validation:
-  - page starts with one bus selector.
-  - one bus shows one amount input.
-  - multiple buses default to one common amount.
-  - multiple buses can switch to per-bus amount inputs.
+  - page starts with smart cashing controls.
+  - Standard mode shows one actual-received input.
+  - Backfill mode reveals a date selector.
+  - Adjust Buses mode shows per-bus worked-day and allocation inputs.
 
 ### `tests.test_dashboard_charts`
 
@@ -695,7 +937,7 @@ The following functions are installed in the `public` schema and are used by con
 | `sf_is_external_transfer(p_financial_tx_id integer)` | Determines whether a financial transaction is linked to an external transfer | `financial_transactions`, `transfers` |
 | `sf_assert_transfer(p_id integer)` | Validates transfer ledger relationships and fee handling | `transfers`, `financial_transactions`, `transfer_fee_rules` |
 | `sf_assert_expense(p_id integer)` | Validates expense payment source, owner funding and ledger links | `expenses`, `financial_transactions`, `owner_loan_transactions`, `expense_allocations` |
-| `sf_assert_collection(p_id integer)` | Validates remittance collection totals and linked inbound ledger entry | `remittance_collections`, `remittances`, `financial_transactions` |
+| `sf_assert_collection(p_id integer)` | Validates remittance collection totals, explicit unallocated differences and linked inbound ledger entry | `remittance_collections`, `remittances`, `financial_transactions` |
 | `sf_assert_advance(p_id integer)` | Validates driver advance payment links | `driver_advances`, `financial_transactions`, `driver_employments` |
 | `sf_assert_deduction(p_id integer)` | Validates driver deduction records and allocations | `driver_deductions`, `salary_deduction_allocations` |
 | `sf_assert_salary(p_id integer)` | Validates salary payment, recoveries and deductions | `driver_salaries`, `financial_transactions`, `salary_advance_recoveries`, `salary_deduction_allocations` |

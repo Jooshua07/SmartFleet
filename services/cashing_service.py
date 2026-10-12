@@ -63,6 +63,9 @@ def get_recent_cashing_collections(limit: int = 10) -> list[dict]:
                     c.id,
                     c.collection_date,
                     c.total_amount,
+                    c.expected_total,
+                    c.unallocated_amount,
+                    c.difference_classification,
                     c.financial_account_id,
                     c.notes,
                     fa.name AS account_name,
@@ -113,6 +116,10 @@ def get_cashing_collection(collection_id: int) -> dict:
                     r.actual_amount,
                     r.expected_amount,
                     r.variance,
+                    r.allocation_provenance,
+                    r.difference_classification,
+                    r.worked_days_adjusted,
+                    r.sunday_worked,
                     r.explanation,
                     r.notes
                 FROM remittances r
@@ -468,6 +475,18 @@ def delete_cashing_collection(collection_id: int) -> None:
             existing = cursor.fetchone()
             if existing is None:
                 raise ValueError("Cashing collection not found.")
+
+            cursor.execute(
+                """
+                SELECT COUNT(*)
+                FROM cashing_obligations
+                WHERE collection_id = %s
+                  AND status <> 'VOID';
+                """,
+                (collection_id,),
+            )
+            if cursor.fetchone()["count"] > 0:
+                raise ValueError("This cashing has obligations. Use a controlled correction instead of deleting it.")
 
             cursor.execute("DELETE FROM remittances WHERE collection_id = %s;", (collection_id,))
             cursor.execute("DELETE FROM remittance_collections WHERE id = %s;", (collection_id,))

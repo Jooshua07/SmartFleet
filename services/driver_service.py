@@ -123,3 +123,74 @@ def create_driver(
             )
 
             return driver
+
+
+def get_driver(driver_id: int) -> dict:
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    d.id,
+                    d.full_name,
+                    d.phone,
+                    d.address,
+                    d.next_of_kin_name,
+                    d.next_of_kin_phone,
+                    d.notes,
+                    de.id AS employment_id,
+                    de.start_date,
+                    de.monthly_salary,
+                    de.status AS employment_status
+                FROM drivers d
+                LEFT JOIN driver_employments de
+                    ON de.driver_id = d.id
+                   AND de.status = 'ACTIVE'
+                WHERE d.id = %s;
+                """,
+                (driver_id,),
+            )
+            driver = cursor.fetchone()
+            if driver is None:
+                raise ValueError("Driver not found.")
+            return driver
+
+
+def update_driver(
+    driver_id: int,
+    full_name: str,
+    phone: str | None = None,
+    address: str | None = None,
+    next_of_kin_name: str | None = None,
+    next_of_kin_phone: str | None = None,
+    notes: str | None = None,
+) -> dict:
+    name = clean_required_text(full_name, "Driver name")
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                UPDATE drivers
+                SET full_name = %s,
+                    phone = %s,
+                    address = %s,
+                    next_of_kin_name = %s,
+                    next_of_kin_phone = %s,
+                    notes = %s
+                WHERE id = %s
+                RETURNING id, full_name, phone;
+                """,
+                (
+                    name,
+                    clean_optional_text(phone),
+                    clean_optional_text(address),
+                    clean_optional_text(next_of_kin_name),
+                    clean_optional_text(next_of_kin_phone),
+                    clean_optional_text(notes),
+                    driver_id,
+                ),
+            )
+            driver = cursor.fetchone()
+            if driver is None:
+                raise ValueError("Driver not found.")
+            return driver
