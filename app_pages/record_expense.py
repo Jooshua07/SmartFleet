@@ -1,17 +1,22 @@
+import importlib
+
 import streamlit as st
 
 from components.cards import empty_state
 from services.bus_service import get_buses_overview
-from services.expense_service import (
-    delete_business_expense,
-    get_operating_expense_categories,
-    get_expense,
-    get_recent_expenses,
-    record_business_expense,
-    update_business_expense,
-)
+import services.expense_service as expense_service
 from utils.dates import today_lusaka
 from utils.formatting import format_date, format_whole_kwacha
+
+
+if not hasattr(expense_service, "get_operating_expense_categories"):
+    expense_service = importlib.reload(expense_service)
+delete_business_expense = expense_service.delete_business_expense
+get_expense = expense_service.get_expense
+get_operating_expense_categories = expense_service.get_operating_expense_categories
+get_recent_expenses = expense_service.get_recent_expenses
+record_business_expense = expense_service.record_business_expense
+update_business_expense = expense_service.update_business_expense
 
 
 def _option_map(rows: list[dict], label_key: str = "name") -> dict[str, int]:
