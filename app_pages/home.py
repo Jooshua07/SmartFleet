@@ -4,9 +4,9 @@ from components.cards import empty_state
 from services.dashboard_service import (
     get_activity_date_bounds,
     get_bus_status_counts,
-    get_financial_summary,
     get_recent_activity,
 )
+from services.finance_service import get_business_balance
 from services.performance_service import get_business_performance_series
 from services.preset_service import get_reporting_baseline_date
 from services.reminder_service import get_open_reminders
@@ -19,7 +19,7 @@ from utils.formatting import format_date, format_whole_kwacha
 @st.cache_data(ttl=15, max_entries=64, show_spinner=False)
 def _load_home_data(start_date, end_date):
     return {
-        "summary": get_financial_summary(start_date, end_date),
+        "balance": get_business_balance(),
         "warnings": get_data_validation_warnings(),
         "counts": get_bus_status_counts(),
         "reminders": get_open_reminders(limit=3),
@@ -113,28 +113,28 @@ st.caption(f"{format_date(start_date)} to {format_date(end_date)}")
 
 with st.skeleton(height=120):
     home_data = _load_home_data(start_date, end_date)
-    summary = home_data["summary"]
+    balance = home_data["balance"]
 
 with st.container(horizontal=True):
     st.metric(
-        "Revenue",
-        format_whole_kwacha(summary["revenue"]),
+        "Total revenue",
+        format_whole_kwacha(balance["money_in"]),
         border=True,
         icon=":material/bar_chart:",
     )
     st.metric(
-        "Operating costs",
-        format_whole_kwacha(summary["expenses"]),
+        "Total expenses",
+        format_whole_kwacha(balance["money_out"]),
         border=True,
         icon=":material/account_balance_wallet:",
     )
     st.metric(
-        "Recorded margin",
-        format_whole_kwacha(summary["revenue"] - summary["expenses"]),
+        "Business balance",
+        format_whole_kwacha(balance["business_balance"]),
         border=True,
         icon=":material/trending_up:",
     )
-st.caption("Recorded margin excludes financing payments, owner drawings and recoverable advances.")
+st.caption(f"From reporting baseline: {format_date(balance['baseline_date'])}.")
 
 warnings = home_data["warnings"]
 if warnings:
