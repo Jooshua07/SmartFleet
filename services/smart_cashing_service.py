@@ -229,20 +229,154 @@ def _entry_expected(entry: dict) -> Decimal:
     )
 
 
-def _find_existing_entries(cursor, collection_date: date, bus_ids: list[int]) -> list[dict]:
+def _assert_airtel_account(cursor, financial_account_id: int, message: str = "Cashing must be paid into Airtel Money.") -> None:
     cursor.execute(
         """
+        SELECT id
+        FROM financial_accounts
+        WHERE id = %s
+          AND active = TRUE
+          AND account_type = 'AIRTEL_MONEY';
+        """,
+        (financial_account_id,),
+    )
+    if cursor.fetchone() is None:
+        raise ValueError(message)
+
+
+def _find_existing_entries(
+    cursor,
+    collection_date: date,
+    bus_ids: list[int],
+    exclude_collection_id: int | None = None,
+) -> list[dict]:
+    excluded_clause = ""
+    params: list = [collection_date, bus_ids]
+    if exclude_collection_id is not None:
+        excluded_clause = "AND c.id <> %s"
+        params.append(exclude_collection_id)
+
+    cursor.execute(
+        f"""
         SELECT b.registration_number, c.collection_date
         FROM remittance_collections c
         JOIN remittances r ON r.collection_id = c.id
         JOIN buses b ON b.id = r.bus_id
         WHERE c.collection_date = %s
           AND r.bus_id = ANY(%s)
+          {excluded_clause}
         ORDER BY b.registration_number;
         """,
-        (collection_date, bus_ids),
+        params,
     )
     return cursor.fetchall()
+
+
+def _assert_collection_can_be_corrected(cursor, collection_id: int) -> None:
+    cursor.execute(
+        """
+        SELECT
+            COUNT(*) FILTER (WHERE o.status <> 'VOID') AS active_obligations,
+            COUNT(p.id) AS payment_count
+        FROM cashing_obligations o
+        LEFT JOIN cashing_obligation_payments p ON p.obligation_id = o.id
+        WHERE o.collection_id = %s;
+        """,
+        (collection_id,),
+    )
+    lock = cursor.fetchone()
+    if lock["active_obligations"] > 0 or lock["payment_count"] > 0:
+        raise ValueError(
+            "This cashing has obligations or payments. Use the obligation records instead of editing it."
+        )
+
+
+def _insert_smart_rows(
+    cursor,
+    collection_id: int,
+    collection_date: date,
+    cleaned_entries: list[dict],
+) -> None:
+    for entry in cleaned_entries:
+        cursor.execute(
+            """
+            INSERT INTO remittances (
+                collection_id,
+                bus_id,
+                normal_days,
+                normal_daily_rate,
+                sunday_days,
+                sunday_rate,
+                actual_amount,
+                explanation,
+                notes,
+                allocation_provenance,
+                difference_classification,
+                worked_days_adjusted,
+                sunday_worked
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, expected_amount;
+            """,
+            (
+                collection_id,
+                entry["bus_id"],
+                entry["normal_days"],
+                entry["normal_daily_rate"],
+                entry["sunday_days"],
+                entry["sunday_rate"],
+                entry["actual_amount"],
+                entry["explanation"],
+                entry["notes"],
+                entry["allocation_provenance"],
+                entry["difference_classification"],
+                entry["worked_days_adjusted"],
+                entry["sunday_worked"],
+            ),
+        )
+        remittance = cursor.fetchone()
+        if entry["difference_classification"] == "CONFIRMED_UNPAID_OBLIGATION":
+            obligation = entry.get("obligation") or {}
+            responsible_name = clean_required_text(
+                obligation.get("responsible_party_name"),
+                "Responsible party",
+            )
+            responsible_type = obligation.get("responsible_party_type") or "OTHER"
+            if responsible_type not in {"HEAD_DRIVER", "ASSIGNED_DRIVER", "OTHER"}:
+                raise ValueError("Responsible party type is not supported.")
+            amount = _money(
+                obligation.get("amount", remittance["expected_amount"] - entry["actual_amount"]),
+                "Obligation amount",
+            )
+            if amount <= 0:
+                raise ValueError("Confirmed obligation amount must be greater than zero.")
+            cursor.execute(
+                """
+                INSERT INTO cashing_obligations (
+                    collection_id,
+                    remittance_id,
+                    amount,
+                    outstanding_amount,
+                    responsible_party_type,
+                    responsible_party_name,
+                    driver_id,
+                    recognized_date,
+                    notes
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                """,
+                (
+                    collection_id,
+                    remittance["id"],
+                    amount,
+                    amount,
+                    responsible_type,
+                    responsible_name,
+                    obligation.get("driver_id"),
+                    collection_date,
+                    clean_optional_text(obligation.get("notes")),
+                ),
+            )
 
 
 def record_smart_cashing_collection(
@@ -275,19 +409,7 @@ def record_smart_cashing_collection(
 
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """
-                SELECT id
-                FROM financial_accounts
-                WHERE id = %s
-                  AND active = TRUE
-                  AND account_type = 'AIRTEL_MONEY';
-                """,
-                (financial_account_id,),
-            )
-            if cursor.fetchone() is None:
-                raise ValueError("Cashing must be paid into Airtel Money.")
-
+            _assert_airtel_account(cursor, financial_account_id)
             existing = _find_existing_entries(
                 cursor,
                 collection_date,
@@ -360,87 +482,160 @@ def record_smart_cashing_collection(
             )
             collection = cursor.fetchone()
 
-            for entry in cleaned_entries:
-                cursor.execute(
-                    """
-                    INSERT INTO remittances (
-                        collection_id,
-                        bus_id,
-                        normal_days,
-                        normal_daily_rate,
-                        sunday_days,
-                        sunday_rate,
-                        actual_amount,
-                        explanation,
-                        notes,
-                        allocation_provenance,
-                        difference_classification,
-                        worked_days_adjusted,
-                        sunday_worked
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id, expected_amount;
-                    """,
-                    (
-                        collection["id"],
-                        entry["bus_id"],
-                        entry["normal_days"],
-                        entry["normal_daily_rate"],
-                        entry["sunday_days"],
-                        entry["sunday_rate"],
-                        entry["actual_amount"],
-                        entry["explanation"],
-                        entry["notes"],
-                        entry["allocation_provenance"],
-                        entry["difference_classification"],
-                        entry["worked_days_adjusted"],
-                        entry["sunday_worked"],
-                    ),
+            _insert_smart_rows(cursor, collection["id"], collection_date, cleaned_entries)
+            return collection
+
+
+def update_smart_cashing_collection(
+    collection_id: int,
+    collection_date: date,
+    financial_account_id: int,
+    total_received,
+    entries: list[dict],
+    unallocated_amount=0,
+    difference_classification: str = "MATCHED",
+    cashing_mode: str = "ADJUSTED",
+    notes: str | None = None,
+) -> dict:
+    collection_date = _coerce_date(collection_date, "Collection date")
+    coverage = get_collection_coverage(collection_date)
+    total_received = _money(total_received, "Actual received")
+    unallocated_amount = _money(unallocated_amount, "Unallocated amount", allow_negative=True)
+    if difference_classification not in DIFFERENCE_CLASSIFICATIONS:
+        raise ValueError("Collection difference classification is not supported.")
+    if cashing_mode not in {"STANDARD", "ADJUSTED"}:
+        raise ValueError("Cashing mode is not supported.")
+
+    cleaned_entries = [_clean_smart_entry(entry) for entry in entries]
+    if not cleaned_entries:
+        raise ValueError("Choose at least one bus.")
+
+    allocation_total = sum((entry["actual_amount"] for entry in cleaned_entries), Decimal("0.00"))
+    if allocation_total + unallocated_amount != total_received:
+        raise ValueError("Bus allocations plus unallocated amount must equal actual received.")
+    expected_total = sum((_entry_expected(entry) for entry in cleaned_entries), Decimal("0.00"))
+
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT financial_transaction_id, cashing_mode
+                FROM remittance_collections
+                WHERE id = %s
+                FOR UPDATE;
+                """,
+                (collection_id,),
+            )
+            existing = cursor.fetchone()
+            if existing is None:
+                raise ValueError("Cashing collection not found.")
+            if existing["cashing_mode"] == "DIRECT":
+                raise ValueError("Use the direct cashing editor for direct cashing records.")
+
+            _assert_collection_can_be_corrected(cursor, collection_id)
+            _assert_airtel_account(cursor, financial_account_id)
+            duplicate_entries = _find_existing_entries(
+                cursor,
+                collection_date,
+                [entry["bus_id"] for entry in cleaned_entries],
+                exclude_collection_id=collection_id,
+            )
+            if duplicate_entries:
+                first = duplicate_entries[0]
+                raise ValueError(
+                    f"Cashing already exists for {first['registration_number']} on "
+                    f"{first['collection_date']:%d/%m/%Y}."
                 )
-                remittance = cursor.fetchone()
-                if entry["difference_classification"] == "CONFIRMED_UNPAID_OBLIGATION":
-                    obligation = entry.get("obligation") or {}
-                    responsible_name = clean_required_text(
-                        obligation.get("responsible_party_name"),
-                        "Responsible party",
-                    )
-                    responsible_type = obligation.get("responsible_party_type") or "OTHER"
-                    if responsible_type not in {"HEAD_DRIVER", "ASSIGNED_DRIVER", "OTHER"}:
-                        raise ValueError("Responsible party type is not supported.")
-                    amount = _money(
-                        obligation.get("amount", remittance["expected_amount"] - entry["actual_amount"]),
-                        "Obligation amount",
-                    )
-                    if amount <= 0:
-                        raise ValueError("Confirmed obligation amount must be greater than zero.")
+
+            financial_transaction_id = existing["financial_transaction_id"]
+            if total_received > 0:
+                if financial_transaction_id is None:
                     cursor.execute(
                         """
-                        INSERT INTO cashing_obligations (
-                            collection_id,
-                            remittance_id,
+                        INSERT INTO financial_transactions (
+                            account_id,
+                            transaction_date,
+                            transaction_type,
+                            direction,
                             amount,
-                            outstanding_amount,
-                            responsible_party_type,
-                            responsible_party_name,
-                            driver_id,
-                            recognized_date,
+                            description,
                             notes
                         )
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);
+                        VALUES (%s, %s, 'CASHING', 'IN', %s, %s, %s)
+                        RETURNING id;
                         """,
                         (
-                            collection["id"],
-                            remittance["id"],
-                            amount,
-                            amount,
-                            responsible_type,
-                            responsible_name,
-                            obligation.get("driver_id"),
+                            financial_account_id,
                             collection_date,
-                            clean_optional_text(obligation.get("notes")),
+                            total_received,
+                            "Smart cashing correction",
+                            clean_optional_text(notes),
                         ),
                     )
+                    financial_transaction_id = cursor.fetchone()["id"]
+                else:
+                    cursor.execute(
+                        """
+                        UPDATE financial_transactions
+                        SET account_id = %s,
+                            transaction_date = %s,
+                            amount = %s,
+                            description = %s,
+                            notes = %s
+                        WHERE id = %s;
+                        """,
+                        (
+                            financial_account_id,
+                            collection_date,
+                            total_received,
+                            "Smart cashing correction",
+                            clean_optional_text(notes),
+                            financial_transaction_id,
+                        ),
+                    )
+            else:
+                financial_transaction_id = None
 
+            cursor.execute("DELETE FROM remittances WHERE collection_id = %s;", (collection_id,))
+            cursor.execute(
+                """
+                UPDATE remittance_collections
+                SET collection_date = %s,
+                    financial_account_id = %s,
+                    total_amount = %s,
+                    financial_transaction_id = %s,
+                    notes = %s,
+                    coverage_start = %s,
+                    coverage_end = %s,
+                    expected_total = %s,
+                    unallocated_amount = %s,
+                    cashing_mode = %s,
+                    difference_classification = %s
+                WHERE id = %s
+                RETURNING id, collection_date, total_amount, expected_total, unallocated_amount;
+                """,
+                (
+                    collection_date,
+                    financial_account_id,
+                    total_received,
+                    financial_transaction_id,
+                    clean_optional_text(notes),
+                    coverage["coverage_start"],
+                    coverage["coverage_end"],
+                    expected_total,
+                    unallocated_amount,
+                    cashing_mode,
+                    difference_classification,
+                    collection_id,
+                ),
+            )
+            collection = cursor.fetchone()
+            if existing["financial_transaction_id"] is not None and total_received == 0:
+                cursor.execute(
+                    "DELETE FROM financial_transactions WHERE id = %s;",
+                    (existing["financial_transaction_id"],),
+                )
+            _insert_smart_rows(cursor, collection_id, collection_date, cleaned_entries)
             return collection
 
 
@@ -625,6 +820,27 @@ def get_cashing_obligations_for_collection(collection_id: int) -> list[dict]:
                 ORDER BY b.registration_number, o.id;
                 """,
                 (collection_id,),
+            )
+            return cursor.fetchall()
+
+
+def list_cashing_obligation_payments(obligation_id: int) -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    p.id,
+                    p.payment_date,
+                    p.amount,
+                    p.notes,
+                    fa.name AS account_name
+                FROM cashing_obligation_payments p
+                JOIN financial_accounts fa ON fa.id = p.financial_account_id
+                WHERE p.obligation_id = %s
+                ORDER BY p.payment_date DESC, p.id DESC;
+                """,
+                (obligation_id,),
             )
             return cursor.fetchall()
 

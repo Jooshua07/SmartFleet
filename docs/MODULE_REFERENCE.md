@@ -445,6 +445,36 @@ This reference covers significant code functions that exist today, plus the inst
   - confirmed unpaid obligations require a responsible party.
 - Used by: Record Cashing page.
 
+### `services.smart_cashing_service.update_smart_cashing_collection`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Correct an unlocked smart cashing collection, its ledger receipt and bus allocations in one transaction.
+- Parameters:
+  - `collection_id`
+  - `collection_date`
+  - `financial_account_id`
+  - `total_received`
+  - `entries`
+  - `unallocated_amount`
+  - `difference_classification`
+  - `cashing_mode`
+  - `notes`
+- Returns: updated collection row.
+- Database tables accessed:
+  - `financial_accounts`
+  - `financial_transactions`
+  - `remittance_collections`
+  - `remittances`
+  - `cashing_obligations`
+  - `cashing_obligation_payments`
+- Important validation:
+  - direct cashing records must use the direct editor.
+  - records with obligations or payments cannot be corrected in place.
+  - allocations plus unallocated amount must equal the actual receipt.
+  - duplicate bus/date cashing rows are blocked, excluding the collection being corrected.
+  - confirmed unpaid obligations require a responsible party.
+- Used by: Record Cashing page correction workflow.
+
 ### `services.smart_cashing_service.record_obligation_payment`
 
 - File: `services/smart_cashing_service.py`
@@ -492,6 +522,17 @@ This reference covers significant code functions that exist today, plus the inst
   - `cashing_obligation_payments`
   - `remittances`
   - `buses`
+- Used by: Record Cashing page details workflow.
+
+### `services.smart_cashing_service.list_cashing_obligation_payments`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Return payment history for one cashing obligation.
+- Parameters: `obligation_id`.
+- Returns: list of payment rows with date, amount, account and notes.
+- Database tables accessed:
+  - `cashing_obligation_payments`
+  - `financial_accounts`
 - Used by: Record Cashing page details workflow.
 
 ### `services.cashing_service.get_recent_cashing_collections`
@@ -882,6 +923,7 @@ This reference covers significant code functions that exist today, plus the inst
   - surplus classification is automatic.
   - unsupported shortage classification is rejected.
   - obligation payments must be positive before database work begins.
+  - smart corrections require bus entries before database work begins.
 
 ### `tests.test_financial_foundation`
 
@@ -913,6 +955,7 @@ This reference covers significant code functions that exist today, plus the inst
   - applies all numbered migrations.
   - inserts one route and bus.
   - records one K1,800 smart cashing collection.
+  - corrects the same collection to K1,700.
   - verifies one matching inbound `CASHING` ledger receipt.
   - drops the temporary database.
 
@@ -927,6 +970,9 @@ This reference covers significant code functions that exist today, plus the inst
   - Adjust Buses mode shows per-bus worked-day and allocation inputs.
   - recent smart collections show received, expected and difference metrics.
   - open obligations show a record-payment action.
+  - users can open a smart correction form from a recent smart record.
+  - smart records with obligations show correction/delete lock messaging.
+  - smart detail view shows payment history under obligations.
 
 ### `tests.test_dashboard_charts`
 

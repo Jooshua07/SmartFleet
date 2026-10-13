@@ -16,7 +16,7 @@ Current blockers:
 
 | Command | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 46 tests |
+| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 50 tests |
 | `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Historical failure: `No module named pytest` |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed: `ModuleNotFoundError: No module named 'database'` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed: `ModuleNotFoundError: No module named 'services'` |
@@ -25,9 +25,9 @@ Current blockers:
 | `.venv\Scripts\python.exe -m compileall app.py app_pages services components utils tests scripts` | Passed |
 | Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Record Cashing, Record Expense, Accounts, Business Presets, Backups, Reports and Reminders |
 | `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `028` to a disposable database and dropped it |
-| `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Temporary database migrated through `028`, one test bus was created, smart cashing was recorded and one matching ledger receipt was verified |
+| `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Temporary database migrated through `028`, one test bus was created, smart cashing was recorded, corrected from K1,800 to K1,700, and one matching ledger receipt was verified |
 | Disposable cashing smoke test | Passed. Temporary database migrated through `023`, one test bus was created, K1,800 cashing was recorded and verified, then the database was dropped |
-| Direct and smart cashing unit/AppTest coverage | Passed. One-bus, multi-bus, missing-value, form-clear, smart summary and open-obligation page-state cases are covered |
+| Direct and smart cashing unit/AppTest coverage | Passed. One-bus, multi-bus, missing-value, form-clear, smart summary, smart correction, locked correction/delete, payment-history and open-obligation page-state cases are covered |
 | Disposable expense smoke test | Passed. Temporary database migrated through `023`, one general expense and one bus expense were recorded and verified against matching outbound ledger rows, then the database was dropped |
 | Disposable edit/delete smoke test | Passed. Temporary database migrated through `024`, opening balance update, expense edit/delete and cashing edit/delete were verified, then the database was dropped |
 | Backup service check | Passed. Created `smartfleet_20261012_235450.dump` before migrations `026`/`027` and `smartfleet_20261012_235728.dump` before migration `028`; both verified with PostgreSQL restore-list output |

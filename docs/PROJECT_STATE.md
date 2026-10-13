@@ -191,7 +191,7 @@ Result: pass.
 
 | Command | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 46 tests |
+| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 50 tests |
 | `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Historical failure because `pytest` is not installed |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed because running the file by path cannot import `database` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed because running the file by path cannot import `services` |
@@ -200,7 +200,7 @@ Result: pass.
 | `.venv\Scripts\python.exe -m compileall app.py app_pages services components utils tests scripts` | Passed |
 | Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Record Cashing, Record Expense, Accounts, Business Presets, Backups, Reports and Reminders |
 | `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `028` to a disposable database and dropped it |
-| `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Created a disposable database, inserted one route and bus, recorded one K1,800 smart cashing collection and verified one matching ledger receipt |
+| `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Created a disposable database, inserted one route and bus, recorded one K1,800 smart cashing collection, corrected it to K1,700 and verified one matching ledger receipt |
 | Disposable cashing smoke test | Passed. Created a temporary database, migrated through `023`, inserted one temporary route and bus, recorded a K1,800 cashing collection, verified collection/remittance totals, then dropped the database |
 | Direct cashing disposable smoke test | Passed against `smartfleet_demo`; inserted, edited and deleted one future-dated test collection and verified no smoke rows remained |
 | Disposable expense smoke test | Passed. Created a temporary database, migrated through `023`, inserted a temporary route and bus, recorded one general expense and one bus expense, verified expense and ledger totals, then dropped the database |

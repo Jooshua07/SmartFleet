@@ -45,6 +45,7 @@ def main() -> None:
             build_standard_allocations,
             get_smart_cashing_preview,
             record_smart_cashing_collection,
+            update_smart_cashing_collection,
         )
 
         route = add_route("Smoke Route")
@@ -53,13 +54,34 @@ def main() -> None:
         collection_date = date(2026, 10, 4)
         preview = get_smart_cashing_preview(collection_date)
         allocation = build_standard_allocations(preview, [bus["id"]], [], "1800")
-        record_smart_cashing_collection(
+        collection = record_smart_cashing_collection(
             collection_date,
             account["id"],
             "1800",
             allocation["entries"],
             allocation["unallocated_amount"],
             allocation["difference_classification"],
+        )
+        corrected_entries = [
+            {
+                **allocation["entries"][0],
+                "actual_amount": "1700",
+                "allocation_provenance": "MANUAL_ADJUSTMENT",
+                "difference_classification": "UNDERPERFORMANCE",
+                "explanation": "Smoke correction",
+                "notes": "Smoke correction",
+            }
+        ]
+        update_smart_cashing_collection(
+            collection["id"],
+            collection_date,
+            account["id"],
+            "1700",
+            corrected_entries,
+            "0",
+            "UNDERPERFORMANCE",
+            "ADJUSTED",
+            "Smoke corrected",
         )
 
         with psycopg.connect(**_connection_kwargs(temp_db)) as conn:
@@ -80,9 +102,9 @@ def main() -> None:
                 )
                 ledger = cursor.fetchone()
 
-        if collections != (1, 1800):
+        if collections != (1, 1700):
             raise RuntimeError(f"Unexpected collection result: {collections}")
-        if ledger != (1, 1800):
+        if ledger != (1, 1700):
             raise RuntimeError(f"Unexpected ledger result: {ledger}")
 
         print(f"Smart cashing smoke passed in {temp_db}.")

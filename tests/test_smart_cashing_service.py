@@ -7,6 +7,7 @@ from services.smart_cashing_service import (
     build_standard_allocations,
     get_collection_coverage,
     record_obligation_payment,
+    update_smart_cashing_collection,
 )
 
 
@@ -96,6 +97,17 @@ class SmartCashingServiceTests(unittest.TestCase):
                 payment_date=date(2026, 10, 8),
                 amount=0,
                 financial_account_id=9,
+            )
+
+    def test_smart_correction_requires_bus_entries_before_database_work(self):
+        with self.assertRaisesRegex(ValueError, "Choose at least one bus"):
+            update_smart_cashing_collection(
+                collection_id=1,
+                collection_date=date(2026, 10, 4),
+                financial_account_id=9,
+                total_received=0,
+                entries=[],
+                unallocated_amount=0,
             )
 
 

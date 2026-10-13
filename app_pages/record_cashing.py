@@ -13,9 +13,11 @@ from services.smart_cashing_service import (
     build_standard_allocations,
     get_cashing_obligations_for_collection,
     get_smart_cashing_preview,
+    list_cashing_obligation_payments,
     list_open_cashing_obligations,
     record_obligation_payment,
     record_smart_cashing_collection,
+    update_smart_cashing_collection,
 )
 from utils.cashing_form import (
     CASHING_FORM_VERSION_KEY,
@@ -37,6 +39,19 @@ def _mode_label(value: str | None) -> str:
     if value == "ADJUSTED":
         return "Adjusted"
     return "Direct"
+
+
+def _collection_classification(entries: list[dict], unallocated_amount: float) -> str:
+    if any(entry["difference_classification"] == "CONFIRMED_UNPAID_OBLIGATION" for entry in entries):
+        return "CONFIRMED_UNPAID_OBLIGATION"
+    if unallocated_amount > 0:
+        return "SURPLUS"
+    if unallocated_amount < 0:
+        return "UNKNOWN_DIFFERENCE"
+    for entry in entries:
+        if entry["difference_classification"] != "MATCHED":
+            return entry["difference_classification"]
+    return "MATCHED"
 
 
 def _bus_options(buses: list[dict]) -> dict[str, dict]:
@@ -408,14 +423,7 @@ def _render_smart_collection_form(today, account: dict) -> None:
         try:
             allocation_total = sum(float(entry["actual_amount"]) for entry in adjusted_entries)
             unallocated_amount = float(total_received) - allocation_total
-            if any(entry["difference_classification"] == "CONFIRMED_UNPAID_OBLIGATION" for entry in adjusted_entries):
-                collection_classification = "CONFIRMED_UNPAID_OBLIGATION"
-            elif unallocated_amount > 0:
-                collection_classification = "SURPLUS"
-            elif unallocated_amount < 0:
-                collection_classification = "UNKNOWN_DIFFERENCE"
-            else:
-                collection_classification = "MATCHED"
+            collection_classification = _collection_classification(adjusted_entries, unallocated_amount)
             record_smart_cashing_collection(
                 collection_date=collection_date,
                 financial_account_id=account["id"],
@@ -574,9 +582,184 @@ def _render_smart_collection_detail(collection_id: int) -> None:
                     st.metric("Outstanding", format_whole_kwacha(obligation["outstanding_amount"]), border=True)
                 if obligation["notes"]:
                     st.caption(obligation["notes"])
+                payments = list_cashing_obligation_payments(obligation["id"])
+                if payments:
+                    st.caption("Payment history")
+                    for payment in payments:
+                        st.caption(
+                            f"{format_date(payment['payment_date'])} | "
+                            f"{format_whole_kwacha(payment['amount'])} | {payment['account_name']}"
+                        )
 
     if st.button("Close details", icon=":material/close:", key=f"close_cashing_detail_{collection_id}"):
         st.session_state.pop("detail_cashing_id", None)
+        st.rerun()
+
+
+def _render_smart_correction_form(collection_id: int, account: dict) -> None:
+    details = get_cashing_collection(collection_id)
+    collection = details["collection"]
+    entries = details["entries"]
+    obligations = get_cashing_obligations_for_collection(collection_id)
+
+    st.subheader("Correct smart cashing")
+    if collection["cashing_mode"] == "DIRECT":
+        st.warning("Use Edit for older direct cashing records.", icon=":material/warning:")
+        if st.button("Close correction", icon=":material/close:", key=f"close_smart_correction_{collection_id}"):
+            st.session_state.pop("correct_cashing_id", None)
+            st.rerun()
+        return
+
+    locked = any(
+        obligation["status"] != "VOID" or obligation["paid_amount"] > 0
+        for obligation in obligations
+    )
+    if locked:
+        st.warning(
+            "This cashing has obligations or payments. Use the obligation/payment records instead of editing it.",
+            icon=":material/lock:",
+        )
+        if st.button("Close correction", icon=":material/close:", key=f"close_locked_correction_{collection_id}"):
+            st.session_state.pop("correct_cashing_id", None)
+            st.rerun()
+        return
+
+    with st.form(f"correct_smart_cashing_{collection_id}", border=False):
+        collection_date = st.date_input(
+            "Collection date",
+            value=collection["collection_date"],
+            format="DD/MM/YYYY",
+            key=f"correct_smart_date_{collection_id}",
+        )
+        st.caption(
+            f"Paid into {account['name']} ({account['account_type'].replace('_', ' ').title()})"
+        )
+        total_received = st.number_input(
+            "Actual received (K)",
+            min_value=0.0,
+            value=float(collection["total_amount"]),
+            step=50.0,
+            key=f"correct_smart_total_{collection_id}",
+        )
+        corrected_entries = []
+        for entry in entries:
+            with st.container(border=True):
+                st.markdown(f"**{entry['registration_number']}**")
+                normal_days = st.number_input(
+                    "Normal days worked",
+                    min_value=0,
+                    max_value=7,
+                    value=int(entry["normal_days"]),
+                    step=1,
+                    key=f"correct_smart_normal_{entry['id']}",
+                )
+                sunday_days = st.number_input(
+                    "Sunday days",
+                    min_value=0,
+                    max_value=1,
+                    value=int(entry["sunday_days"]),
+                    step=1,
+                    key=f"correct_smart_sunday_{entry['id']}",
+                )
+                actual_amount = st.number_input(
+                    "Bus allocation (K)",
+                    min_value=0.0,
+                    value=float(entry["actual_amount"]),
+                    step=50.0,
+                    key=f"correct_smart_amount_{entry['id']}",
+                )
+                classification_options = [
+                    "MATCHED",
+                    "REDUCED_WORKDAYS",
+                    "UNDERPERFORMANCE",
+                    "CONFIRMED_UNPAID_OBLIGATION",
+                    "UNKNOWN_DIFFERENCE",
+                    "SURPLUS",
+                ]
+                classification = st.selectbox(
+                    "Difference reason",
+                    classification_options,
+                    index=classification_options.index(entry["difference_classification"]),
+                    key=f"correct_smart_class_{entry['id']}",
+                )
+                responsible_type = st.selectbox(
+                    "Responsible party type",
+                    ["OTHER", "ASSIGNED_DRIVER", "HEAD_DRIVER"],
+                    key=f"correct_smart_party_type_{entry['id']}",
+                )
+                responsible_name = st.text_input(
+                    "Responsible party",
+                    key=f"correct_smart_party_name_{entry['id']}",
+                )
+                reason = st.text_input(
+                    "Reason / note",
+                    value=entry["explanation"] or "",
+                    key=f"correct_smart_reason_{entry['id']}",
+                )
+                expected_amount = (
+                    normal_days * float(entry["normal_daily_rate"])
+                    + sunday_days * float(entry["sunday_rate"])
+                )
+                obligation_amount = max(expected_amount - float(actual_amount), 0)
+                corrected_entries.append(
+                    {
+                        "bus_id": entry["bus_id"],
+                        "normal_days": normal_days,
+                        "normal_daily_rate": entry["normal_daily_rate"],
+                        "sunday_days": sunday_days,
+                        "sunday_rate": entry["sunday_rate"],
+                        "actual_amount": actual_amount,
+                        "allocation_provenance": "MANUAL_ADJUSTMENT",
+                        "difference_classification": classification,
+                        "worked_days_adjusted": normal_days != entry["normal_days"],
+                        "sunday_worked": sunday_days > 0,
+                        "explanation": reason,
+                        "notes": reason,
+                        "obligation": {
+                            "responsible_party_type": responsible_type,
+                            "responsible_party_name": responsible_name,
+                            "amount": obligation_amount,
+                            "notes": reason,
+                        },
+                    }
+                )
+
+        correction_reason = st.text_area(
+            "Correction note",
+            value=collection["notes"] or "",
+            height=80,
+            key=f"correct_smart_notes_{collection_id}",
+        )
+        submitted = st.form_submit_button(
+            "Save correction",
+            icon=":material/save:",
+            type="primary",
+        )
+
+    if submitted:
+        try:
+            allocation_total = sum(float(entry["actual_amount"]) for entry in corrected_entries)
+            unallocated_amount = float(total_received) - allocation_total
+            update_smart_cashing_collection(
+                collection_id=collection_id,
+                collection_date=collection_date,
+                financial_account_id=account["id"],
+                total_received=total_received,
+                entries=corrected_entries,
+                unallocated_amount=unallocated_amount,
+                difference_classification=_collection_classification(corrected_entries, unallocated_amount),
+                cashing_mode="ADJUSTED",
+                notes=correction_reason,
+            )
+            st.cache_data.clear()
+            st.session_state.pop("correct_cashing_id", None)
+            st.session_state.cashing_saved = True
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Could not save correction: {exc}", icon=":material/error:")
+
+    if st.button("Cancel correction", icon=":material/close:", key=f"cancel_smart_correction_{collection_id}"):
+        st.session_state.pop("correct_cashing_id", None)
         st.rerun()
 
 
@@ -688,11 +871,17 @@ else:
 
     edit_id = st.session_state.get("edit_cashing_id")
     detail_id = st.session_state.get("detail_cashing_id")
+    correct_id = st.session_state.get("correct_cashing_id")
     if edit_id:
         try:
             _render_edit_collection(edit_id, collection_account)
         except Exception as exc:
             st.error(f"Could not load cashing: {exc}", icon=":material/error:")
+    elif correct_id:
+        try:
+            _render_smart_correction_form(correct_id, collection_account)
+        except Exception as exc:
+            st.error(f"Could not load smart correction: {exc}", icon=":material/error:")
     elif detail_id:
         try:
             _render_smart_collection_detail(detail_id)
@@ -732,11 +921,29 @@ if recent:
                     if st.button("Edit", icon=":material/edit:", key=f"edit_cashing_{collection['id']}"):
                         st.session_state.edit_cashing_id = collection["id"]
                         st.rerun()
+                    delete_disabled = False
                 else:
                     if st.button("Details", icon=":material/receipt_long:", key=f"detail_cashing_{collection['id']}"):
                         st.session_state.detail_cashing_id = collection["id"]
                         st.rerun()
-                if st.button("Delete", icon=":material/delete:", key=f"delete_cashing_{collection['id']}"):
+                    locked_by_obligations = bool(collection["obligation_count"])
+                    if st.button(
+                        "Correct",
+                        icon=":material/edit_note:",
+                        key=f"correct_cashing_{collection['id']}",
+                        disabled=locked_by_obligations,
+                    ):
+                        st.session_state.correct_cashing_id = collection["id"]
+                        st.rerun()
+                    if locked_by_obligations:
+                        st.caption("Correction locked by obligations or payments.")
+                    delete_disabled = locked_by_obligations
+                if st.button(
+                    "Delete",
+                    icon=":material/delete:",
+                    key=f"delete_cashing_{collection['id']}",
+                    disabled=delete_disabled,
+                ):
                     st.session_state.delete_cashing_id = collection["id"]
                     st.rerun()
 

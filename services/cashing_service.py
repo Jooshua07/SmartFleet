@@ -138,7 +138,9 @@ def get_cashing_collection(collection_id: int) -> dict:
                     r.bus_id,
                     b.registration_number,
                     r.normal_days,
+                    r.normal_daily_rate,
                     r.sunday_days,
+                    r.sunday_rate,
                     r.actual_amount,
                     r.expected_amount,
                     r.variance,
@@ -504,15 +506,18 @@ def delete_cashing_collection(collection_id: int) -> None:
 
             cursor.execute(
                 """
-                SELECT COUNT(*)
-                FROM cashing_obligations
-                WHERE collection_id = %s
-                  AND status <> 'VOID';
+                SELECT
+                    COUNT(*) FILTER (WHERE o.status <> 'VOID') AS active_obligations,
+                    COUNT(p.id) AS payment_count
+                FROM cashing_obligations o
+                LEFT JOIN cashing_obligation_payments p ON p.obligation_id = o.id
+                WHERE o.collection_id = %s;
                 """,
                 (collection_id,),
             )
-            if cursor.fetchone()["count"] > 0:
-                raise ValueError("This cashing has obligations. Use a controlled correction instead of deleting it.")
+            lock = cursor.fetchone()
+            if lock["active_obligations"] > 0 or lock["payment_count"] > 0:
+                raise ValueError("This cashing has obligations or payments and cannot be deleted here.")
 
             cursor.execute("DELETE FROM remittances WHERE collection_id = %s;", (collection_id,))
             cursor.execute("DELETE FROM remittance_collections WHERE id = %s;", (collection_id,))
