@@ -191,7 +191,7 @@ Result: pass.
 
 | Command | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 43 tests |
+| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 46 tests |
 | `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Historical failure because `pytest` is not installed |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed because running the file by path cannot import `database` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed because running the file by path cannot import `services` |

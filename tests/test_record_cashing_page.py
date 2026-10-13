@@ -56,14 +56,18 @@ PREVIEW = {
 
 
 class RecordCashingPageTests(unittest.TestCase):
-    def _patched_page(self):
+    def _patched_page(self, recent=None, obligations=None):
         patches = [
             patch(
                 "services.cashing_service.get_collection_destination_account",
                 return_value=COLLECTION_ACCOUNT,
             ),
             patch("services.smart_cashing_service.get_smart_cashing_preview", return_value=PREVIEW),
-            patch("services.cashing_service.get_recent_cashing_collections", return_value=[]),
+            patch("services.cashing_service.get_recent_cashing_collections", return_value=recent or []),
+            patch(
+                "services.smart_cashing_service.list_open_cashing_obligations",
+                return_value=obligations or [],
+            ),
             patch("utils.dates.today_lusaka", return_value=date(2026, 10, 4)),
         ]
         for active_patch in patches:
@@ -105,6 +109,63 @@ class RecordCashingPageTests(unittest.TestCase):
         labels = [field.label for field in app.number_input]
         self.assertIn("Normal days worked", labels)
         self.assertIn("Bus allocation (K)", labels)
+
+    def test_recent_smart_collection_shows_received_expected_difference(self):
+        recent = [
+            {
+                "id": 10,
+                "collection_date": date(2026, 10, 4),
+                "total_amount": Decimal("3000.00"),
+                "expected_total": Decimal("3600.00"),
+                "unallocated_amount": Decimal("-600.00"),
+                "coverage_start": date(2026, 10, 1),
+                "coverage_end": date(2026, 10, 3),
+                "cashing_mode": "STANDARD",
+                "difference_classification": "UNKNOWN_DIFFERENCE",
+                "financial_account_id": 9,
+                "notes": None,
+                "account_name": "Airtel Money",
+                "bus_count": 2,
+                "obligation_count": 0,
+                "outstanding_amount": Decimal("0.00"),
+            }
+        ]
+        app = self._patched_page(recent=recent)
+        app.run()
+
+        self.assertEqual(len(app.exception), 0)
+        labels = [metric.label for metric in app.metric]
+        self.assertIn("Received", labels)
+        self.assertIn("Expected", labels)
+        self.assertIn("Difference", labels)
+        self.assertIn("Details", [button.label for button in app.button])
+
+    def test_open_obligations_section_renders_payment_action(self):
+        obligations = [
+            {
+                "id": 5,
+                "collection_id": 10,
+                "remittance_id": 20,
+                "amount": Decimal("600.00"),
+                "outstanding_amount": Decimal("600.00"),
+                "responsible_party_type": "ASSIGNED_DRIVER",
+                "responsible_party_name": "Mary Banda",
+                "recognized_date": date(2026, 10, 4),
+                "status": "OPEN",
+                "notes": "Short cashing",
+                "collection_date": date(2026, 10, 4),
+                "registration_number": "ABC123",
+                "expected_amount": Decimal("1800.00"),
+                "actual_amount": Decimal("1200.00"),
+                "paid_amount": Decimal("0.00"),
+            }
+        ]
+        app = self._patched_page(obligations=obligations)
+        app.run()
+
+        self.assertEqual(len(app.exception), 0)
+        self.assertIn("Open cashing obligations", [subheader.value for subheader in app.subheader])
+        self.assertIn("Record payment", [button.label for button in app.button])
 
 
 if __name__ == "__main__":

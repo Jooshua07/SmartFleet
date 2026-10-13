@@ -11,7 +11,10 @@ from services.cashing_service import (
 )
 from services.smart_cashing_service import (
     build_standard_allocations,
+    get_cashing_obligations_for_collection,
     get_smart_cashing_preview,
+    list_open_cashing_obligations,
+    record_obligation_payment,
     record_smart_cashing_collection,
 )
 from utils.cashing_form import (
@@ -22,6 +25,18 @@ from utils.cashing_form import (
 )
 from utils.dates import today_lusaka
 from utils.formatting import format_date, format_whole_kwacha
+
+
+def _classification_label(value: str | None) -> str:
+    return (value or "MATCHED").replace("_", " ").title()
+
+
+def _mode_label(value: str | None) -> str:
+    if value == "STANDARD":
+        return "Standard"
+    if value == "ADJUSTED":
+        return "Adjusted"
+    return "Direct"
 
 
 def _bus_options(buses: list[dict]) -> dict[str, dict]:
@@ -501,6 +516,155 @@ def _render_edit_collection(collection_id: int, account: dict) -> None:
         st.rerun()
 
 
+def _render_smart_collection_detail(collection_id: int) -> None:
+    details = get_cashing_collection(collection_id)
+    collection = details["collection"]
+    entries = details["entries"]
+    obligations = get_cashing_obligations_for_collection(collection_id)
+
+    st.subheader("Cashing details")
+    with st.container(border=True):
+        st.markdown(f"**{format_date(collection['collection_date'])}**")
+        st.caption(
+            f"{_mode_label(collection['cashing_mode'])} | "
+            f"{_classification_label(collection['difference_classification'])}"
+        )
+        if collection["coverage_start"] and collection["coverage_end"]:
+            st.caption(
+                f"Covers {format_date(collection['coverage_start'])} to "
+                f"{format_date(collection['coverage_end'])}"
+            )
+        with st.container(horizontal=True):
+            st.metric("Received", format_whole_kwacha(collection["total_amount"]), border=True)
+            st.metric("Expected", format_whole_kwacha(collection["expected_total"]), border=True)
+            st.metric("Difference", format_whole_kwacha(collection["unallocated_amount"]), border=True)
+        if collection["notes"]:
+            st.caption(collection["notes"])
+
+    st.markdown("**Bus allocations**")
+    for entry in entries:
+        with st.container(border=True):
+            st.markdown(f"**{entry['registration_number']}**")
+            st.caption(
+                f"{entry['normal_days']} normal day(s), {entry['sunday_days']} Sunday | "
+                f"{_classification_label(entry['difference_classification'])}"
+            )
+            with st.container(horizontal=True):
+                st.metric("Allocated", format_whole_kwacha(entry["actual_amount"]), border=True)
+                st.metric("Expected", format_whole_kwacha(entry["expected_amount"]), border=True)
+                st.metric("Variance", format_whole_kwacha(entry["variance"]), border=True)
+            if entry["explanation"]:
+                st.caption(entry["explanation"])
+
+    if obligations:
+        st.markdown("**Obligations on this cashing**")
+        for obligation in obligations:
+            with st.container(border=True):
+                st.markdown(
+                    f"**{obligation['registration_number']} | "
+                    f"{obligation['responsible_party_name']}**"
+                )
+                st.caption(
+                    f"{obligation['responsible_party_type'].replace('_', ' ').title()} | "
+                    f"{obligation['status'].replace('_', ' ').title()}"
+                )
+                with st.container(horizontal=True):
+                    st.metric("Original", format_whole_kwacha(obligation["amount"]), border=True)
+                    st.metric("Paid", format_whole_kwacha(obligation["paid_amount"]), border=True)
+                    st.metric("Outstanding", format_whole_kwacha(obligation["outstanding_amount"]), border=True)
+                if obligation["notes"]:
+                    st.caption(obligation["notes"])
+
+    if st.button("Close details", icon=":material/close:", key=f"close_cashing_detail_{collection_id}"):
+        st.session_state.pop("detail_cashing_id", None)
+        st.rerun()
+
+
+def _render_obligation_payment_form(obligation: dict, account: dict, today) -> None:
+    form_key = f"obligation_payment_{obligation['id']}"
+    with st.form(form_key, border=False, clear_on_submit=True):
+        payment_date = st.date_input(
+            "Payment date",
+            value=today,
+            format="DD/MM/YYYY",
+            key=f"{form_key}_date",
+        )
+        amount = st.number_input(
+            "Amount received (K)",
+            min_value=0.0,
+            max_value=float(obligation["outstanding_amount"]),
+            value=float(obligation["outstanding_amount"]),
+            step=50.0,
+            key=f"{form_key}_amount",
+        )
+        notes = st.text_area(
+            "Payment notes",
+            height=70,
+            key=f"{form_key}_notes",
+        )
+        submitted = st.form_submit_button(
+            "Save payment",
+            icon=":material/save:",
+            type="primary",
+        )
+
+    if submitted:
+        try:
+            record_obligation_payment(
+                obligation_id=obligation["id"],
+                payment_date=payment_date,
+                amount=amount,
+                financial_account_id=account["id"],
+                notes=notes,
+            )
+            st.cache_data.clear()
+            st.session_state.pop("pay_obligation_id", None)
+            st.session_state.obligation_payment_saved = True
+            st.rerun()
+        except Exception as exc:
+            st.error(f"Could not record obligation payment: {exc}", icon=":material/error:")
+
+
+def _render_open_obligations(account: dict, today) -> None:
+    obligations = list_open_cashing_obligations(limit=12)
+    if not obligations:
+        return
+
+    st.subheader("Open cashing obligations")
+    for obligation in obligations:
+        with st.container(border=True):
+            st.markdown(
+                f"**{obligation['registration_number']} | "
+                f"{obligation['responsible_party_name']}**"
+            )
+            st.caption(
+                f"Cashing: {format_date(obligation['collection_date'])} | "
+                f"Recognized: {format_date(obligation['recognized_date'])} | "
+                f"{obligation['responsible_party_type'].replace('_', ' ').title()}"
+            )
+            with st.container(horizontal=True):
+                st.metric("Original", format_whole_kwacha(obligation["amount"]), border=True)
+                st.metric("Paid", format_whole_kwacha(obligation["paid_amount"]), border=True)
+                st.metric("Outstanding", format_whole_kwacha(obligation["outstanding_amount"]), border=True)
+            if obligation["notes"]:
+                st.caption(obligation["notes"])
+
+            if st.button(
+                "Record payment",
+                icon=":material/payments:",
+                key=f"pay_obligation_{obligation['id']}",
+            ):
+                st.session_state.pay_obligation_id = obligation["id"]
+                st.rerun()
+
+            if st.session_state.get("pay_obligation_id") == obligation["id"]:
+                st.caption(
+                    f"Paid into {account['name']} "
+                    f"({account['account_type'].replace('_', ' ').title()})"
+                )
+                _render_obligation_payment_form(obligation, account, today)
+
+
 st.subheader("Record Cashing")
 
 today = today_lusaka()
@@ -519,13 +683,21 @@ if collection_account is None:
 else:
     if st.session_state.pop("cashing_saved", False):
         st.success("Cashing recorded.", icon=":material/check_circle:")
+    if st.session_state.pop("obligation_payment_saved", False):
+        st.success("Obligation payment recorded.", icon=":material/check_circle:")
 
     edit_id = st.session_state.get("edit_cashing_id")
+    detail_id = st.session_state.get("detail_cashing_id")
     if edit_id:
         try:
             _render_edit_collection(edit_id, collection_account)
         except Exception as exc:
             st.error(f"Could not load cashing: {exc}", icon=":material/error:")
+    elif detail_id:
+        try:
+            _render_smart_collection_detail(detail_id)
+        except Exception as exc:
+            st.error(f"Could not load cashing details: {exc}", icon=":material/error:")
     else:
         _render_smart_collection_form(today, collection_account)
 
@@ -535,12 +707,35 @@ if recent:
     for collection in recent:
         with st.container(border=True):
             st.markdown(f"**{format_date(collection['collection_date'])}**")
-            st.caption(f"{collection['bus_count']} bus entries | {collection['account_name']}")
-            st.markdown(format_whole_kwacha(collection["total_amount"]))
+            st.caption(
+                f"{_mode_label(collection['cashing_mode'])} | "
+                f"{collection['bus_count']} bus entries | {collection['account_name']}"
+            )
+            if collection["coverage_start"] and collection["coverage_end"]:
+                st.caption(
+                    f"Covers {format_date(collection['coverage_start'])} to "
+                    f"{format_date(collection['coverage_end'])}"
+                )
             with st.container(horizontal=True):
-                if st.button("Edit", icon=":material/edit:", key=f"edit_cashing_{collection['id']}"):
-                    st.session_state.edit_cashing_id = collection["id"]
-                    st.rerun()
+                st.metric("Received", format_whole_kwacha(collection["total_amount"]), border=True)
+                st.metric("Expected", format_whole_kwacha(collection["expected_total"]), border=True)
+                st.metric("Difference", format_whole_kwacha(collection["unallocated_amount"]), border=True)
+            if collection["difference_classification"] != "MATCHED":
+                st.caption(_classification_label(collection["difference_classification"]))
+            if collection["outstanding_amount"] and collection["outstanding_amount"] > 0:
+                st.warning(
+                    f"Outstanding obligation: {format_whole_kwacha(collection['outstanding_amount'])}",
+                    icon=":material/warning:",
+                )
+            with st.container(horizontal=True):
+                if collection["cashing_mode"] == "DIRECT":
+                    if st.button("Edit", icon=":material/edit:", key=f"edit_cashing_{collection['id']}"):
+                        st.session_state.edit_cashing_id = collection["id"]
+                        st.rerun()
+                else:
+                    if st.button("Details", icon=":material/receipt_long:", key=f"detail_cashing_{collection['id']}"):
+                        st.session_state.detail_cashing_id = collection["id"]
+                        st.rerun()
                 if st.button("Delete", icon=":material/delete:", key=f"delete_cashing_{collection['id']}"):
                     st.session_state.delete_cashing_id = collection["id"]
                     st.rerun()
@@ -565,3 +760,6 @@ if recent:
                     if st.button("Cancel", key=f"cancel_delete_cashing_{collection['id']}"):
                         st.session_state.pop("delete_cashing_id", None)
                         st.rerun()
+
+if collection_account is not None:
+    _render_open_obligations(collection_account, today)

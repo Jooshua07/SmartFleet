@@ -462,8 +462,37 @@ This reference covers significant code functions that exist today, plus the inst
   - `financial_transactions`
   - `cashing_obligation_payments`
 - Important validation:
+  - payment amount must be greater than zero.
+  - voided or already-settled obligations cannot receive payments.
   - payment cannot exceed the outstanding amount.
   - payment must be paid into Airtel Money.
+
+### `services.smart_cashing_service.list_open_cashing_obligations`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Return open or partially settled cashing obligations for the Record Cashing payment section.
+- Parameters: optional `limit`.
+- Returns: list of obligation rows with collection, bus, paid and outstanding context.
+- Database tables accessed:
+  - `cashing_obligations`
+  - `cashing_obligation_payments`
+  - `remittance_collections`
+  - `remittances`
+  - `buses`
+- Used by: Record Cashing page.
+
+### `services.smart_cashing_service.get_cashing_obligations_for_collection`
+
+- File: `services/smart_cashing_service.py`
+- Purpose: Return obligations linked to one cashing collection for the smart-cashing details view.
+- Parameters: `collection_id`.
+- Returns: list of obligation rows with bus, paid and outstanding context.
+- Database tables accessed:
+  - `cashing_obligations`
+  - `cashing_obligation_payments`
+  - `remittances`
+  - `buses`
+- Used by: Record Cashing page details workflow.
 
 ### `services.cashing_service.get_recent_cashing_collections`
 
@@ -852,6 +881,7 @@ This reference covers significant code functions that exist today, plus the inst
   - shortages stay explicit as unallocated negative amounts.
   - surplus classification is automatic.
   - unsupported shortage classification is rejected.
+  - obligation payments must be positive before database work begins.
 
 ### `tests.test_financial_foundation`
 
@@ -895,6 +925,8 @@ This reference covers significant code functions that exist today, plus the inst
   - Standard mode shows one actual-received input.
   - Backfill mode reveals a date selector.
   - Adjust Buses mode shows per-bus worked-day and allocation inputs.
+  - recent smart collections show received, expected and difference metrics.
+  - open obligations show a record-payment action.
 
 ### `tests.test_dashboard_charts`
 

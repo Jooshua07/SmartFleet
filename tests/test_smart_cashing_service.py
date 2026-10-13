@@ -6,6 +6,7 @@ from services.smart_cashing_service import (
     _clean_smart_entry,
     build_standard_allocations,
     get_collection_coverage,
+    record_obligation_payment,
 )
 
 
@@ -86,6 +87,15 @@ class SmartCashingServiceTests(unittest.TestCase):
                     "actual_amount": 1800,
                     "difference_classification": "MADE_UP",
                 }
+            )
+
+    def test_obligation_payment_must_be_positive_before_database_work(self):
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            record_obligation_payment(
+                obligation_id=1,
+                payment_date=date(2026, 10, 8),
+                amount=0,
+                financial_account_id=9,
             )
 
 

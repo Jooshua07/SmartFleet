@@ -65,15 +65,35 @@ def get_recent_cashing_collections(limit: int = 10) -> list[dict]:
                     c.total_amount,
                     c.expected_total,
                     c.unallocated_amount,
+                    c.coverage_start,
+                    c.coverage_end,
+                    c.cashing_mode,
                     c.difference_classification,
                     c.financial_account_id,
                     c.notes,
                     fa.name AS account_name,
-                    COUNT(r.id) AS bus_count
+                    rem.bus_count,
+                    obligations.obligation_count,
+                    obligations.outstanding_amount
                 FROM remittance_collections c
                 JOIN financial_accounts fa ON fa.id = c.financial_account_id
-                LEFT JOIN remittances r ON r.collection_id = c.id
-                GROUP BY c.id, fa.name
+                LEFT JOIN LATERAL (
+                    SELECT COUNT(*) AS bus_count
+                    FROM remittances r
+                    WHERE r.collection_id = c.id
+                ) rem ON TRUE
+                LEFT JOIN LATERAL (
+                    SELECT
+                        COUNT(*) FILTER (WHERE o.status <> 'VOID') AS obligation_count,
+                        COALESCE(
+                            SUM(o.outstanding_amount) FILTER (
+                                WHERE o.status IN ('OPEN', 'PARTIALLY_SETTLED')
+                            ),
+                            0
+                        ) AS outstanding_amount
+                    FROM cashing_obligations o
+                    WHERE o.collection_id = c.id
+                ) obligations ON TRUE
                 ORDER BY c.collection_date DESC, c.id DESC
                 LIMIT %s;
                 """,
@@ -93,6 +113,12 @@ def get_cashing_collection(collection_id: int) -> dict:
                     c.financial_account_id,
                     c.financial_transaction_id,
                     c.total_amount,
+                    c.expected_total,
+                    c.unallocated_amount,
+                    c.coverage_start,
+                    c.coverage_end,
+                    c.cashing_mode,
+                    c.difference_classification,
                     c.notes,
                     fa.name AS account_name
                 FROM remittance_collections c

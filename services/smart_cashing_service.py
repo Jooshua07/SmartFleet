@@ -453,12 +453,14 @@ def record_obligation_payment(
 ) -> dict:
     payment_date = _coerce_date(payment_date, "Payment date")
     amount = _money(amount, "Payment amount")
+    if amount <= 0:
+        raise ValueError("Payment amount must be greater than zero.")
 
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 """
-                SELECT id, outstanding_amount
+                SELECT id, outstanding_amount, status
                 FROM cashing_obligations
                 WHERE id = %s
                 FOR UPDATE;
@@ -468,6 +470,10 @@ def record_obligation_payment(
             obligation = cursor.fetchone()
             if obligation is None:
                 raise ValueError("Cashing obligation not found.")
+            if obligation["status"] == "VOID":
+                raise ValueError("This cashing obligation has been voided.")
+            if obligation["outstanding_amount"] <= 0:
+                raise ValueError("This cashing obligation is already settled.")
             if amount > obligation["outstanding_amount"]:
                 raise ValueError("Payment cannot exceed the outstanding amount.")
 
@@ -544,4 +550,81 @@ def record_obligation_payment(
                 (new_outstanding, status, obligation_id),
             )
             return payment
+
+
+def list_open_cashing_obligations(limit: int = 20) -> list[dict]:
+    limit = max(int(limit or 20), 1)
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    o.id,
+                    o.collection_id,
+                    o.remittance_id,
+                    o.amount,
+                    o.outstanding_amount,
+                    o.responsible_party_type,
+                    o.responsible_party_name,
+                    o.recognized_date,
+                    o.status,
+                    o.notes,
+                    c.collection_date,
+                    b.registration_number,
+                    r.expected_amount,
+                    r.actual_amount,
+                    paid.paid_amount
+                FROM cashing_obligations o
+                JOIN remittance_collections c ON c.id = o.collection_id
+                JOIN remittances r ON r.id = o.remittance_id
+                JOIN buses b ON b.id = r.bus_id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(SUM(p.amount), 0) AS paid_amount
+                    FROM cashing_obligation_payments p
+                    WHERE p.obligation_id = o.id
+                ) paid ON TRUE
+                WHERE o.status IN ('OPEN', 'PARTIALLY_SETTLED')
+                  AND o.outstanding_amount > 0
+                ORDER BY o.recognized_date DESC, o.id DESC
+                LIMIT %s;
+                """,
+                (limit,),
+            )
+            return cursor.fetchall()
+
+
+def get_cashing_obligations_for_collection(collection_id: int) -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    o.id,
+                    o.collection_id,
+                    o.remittance_id,
+                    o.amount,
+                    o.outstanding_amount,
+                    o.responsible_party_type,
+                    o.responsible_party_name,
+                    o.recognized_date,
+                    o.status,
+                    o.notes,
+                    b.registration_number,
+                    r.expected_amount,
+                    r.actual_amount,
+                    paid.paid_amount
+                FROM cashing_obligations o
+                JOIN remittances r ON r.id = o.remittance_id
+                JOIN buses b ON b.id = r.bus_id
+                LEFT JOIN LATERAL (
+                    SELECT COALESCE(SUM(p.amount), 0) AS paid_amount
+                    FROM cashing_obligation_payments p
+                    WHERE p.obligation_id = o.id
+                ) paid ON TRUE
+                WHERE o.collection_id = %s
+                ORDER BY b.registration_number, o.id;
+                """,
+                (collection_id,),
+            )
+            return cursor.fetchall()
 
