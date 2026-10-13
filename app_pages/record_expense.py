@@ -176,6 +176,13 @@ def _render_expense_form(
 
 
 st.subheader("Record Expense")
+with st.container(horizontal=True):
+    if st.button("Repay Loan", icon=":material/credit_card:"):
+        st.switch_page("app_pages/loans.py")
+    if st.button("Driver Money", icon=":material/id_card:"):
+        st.switch_page("app_pages/driver_money.py")
+    if st.button("Owner Money", icon=":material/account_balance_wallet:"):
+        st.switch_page("app_pages/owner_money.py")
 
 today = today_lusaka()
 categories = get_operating_expense_categories()

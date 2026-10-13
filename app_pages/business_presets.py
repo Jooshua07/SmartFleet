@@ -6,6 +6,7 @@ from components.cards import empty_state
 from services.driver_service import get_drivers_overview
 from services.preset_service import (
     get_business_settings,
+    get_driver_advance_limit,
     list_cashing_rates,
     list_cashing_schedule_rules,
     list_driver_salary_presets,
@@ -13,6 +14,7 @@ from services.preset_service import (
     set_cashing_rate,
     set_cashing_schedule_rule,
     set_driver_salary_preset,
+    set_driver_advance_limit,
     set_reminder_preset,
     set_reporting_baseline_date,
 )
@@ -189,6 +191,21 @@ try:
                         driver_options[driver_label],
                         notes,
                     )
+
+        with st.container(border=True):
+            st.markdown("**Driver advance limit**")
+            current_limit = get_driver_advance_limit()
+            st.metric("Maximum outstanding advance", format_whole_kwacha(current_limit))
+            with st.form("driver_advance_limit_form"):
+                limit = st.number_input(
+                    "Advance limit (K)",
+                    min_value=0.0,
+                    value=float(current_limit),
+                    step=100.0,
+                )
+                notes = st.text_input("Notes", key="driver_advance_limit_notes")
+                if st.form_submit_button("Save advance limit", icon=":material/save:", type="primary"):
+                    _show_save_result(set_driver_advance_limit, limit, notes)
 
         if salary_presets:
             st.subheader("Salary history")

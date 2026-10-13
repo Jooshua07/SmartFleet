@@ -9,6 +9,7 @@ from utils.validation import clean_optional_text, parse_non_negative_amount, par
 
 DEFAULT_COLLECTION_ACCOUNT_TYPE = "AIRTEL_MONEY"
 REPORTING_BASELINE_SETTING = "REPORTING_BASELINE_DATE"
+DRIVER_ADVANCE_LIMIT_SETTING = "DRIVER_ADVANCE_LIMIT"
 
 
 def _coerce_date(value: date, field_name: str) -> date:
@@ -117,6 +118,51 @@ def set_reporting_baseline_date(baseline_date: date, notes: str | None = None) -
                 baseline_date,
                 notes,
             )
+
+
+def get_driver_advance_limit() -> Decimal:
+    value = get_business_setting(DRIVER_ADVANCE_LIMIT_SETTING, "1000.00")
+    return Decimal(str(value))
+
+
+def set_driver_advance_limit(amount, notes: str | None = None) -> dict:
+    limit = parse_non_negative_amount(amount, "Driver advance limit")
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT setting_value
+                FROM business_settings
+                WHERE setting_key = %s
+                FOR UPDATE;
+                """,
+                (DRIVER_ADVANCE_LIMIT_SETTING,),
+            )
+            existing = cursor.fetchone()
+            old_value = existing["setting_value"] if existing else None
+            cursor.execute(
+                """
+                INSERT INTO business_settings (setting_key, setting_value, setting_type, notes)
+                VALUES (%s, %s, 'NUMBER', %s)
+                ON CONFLICT (setting_key) DO UPDATE
+                SET setting_value = EXCLUDED.setting_value,
+                    notes = EXCLUDED.notes,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING setting_key, setting_value, setting_type, notes;
+                """,
+                (DRIVER_ADVANCE_LIMIT_SETTING, str(limit), clean_optional_text(notes)),
+            )
+            setting = cursor.fetchone()
+            _record_audit(
+                cursor,
+                "DRIVER_ADVANCE",
+                DRIVER_ADVANCE_LIMIT_SETTING,
+                old_value,
+                limit,
+                None,
+                notes,
+            )
+            return setting
 
 
 def get_default_collection_account_type() -> str:

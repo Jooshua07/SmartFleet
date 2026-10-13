@@ -11,7 +11,7 @@ This document records the actual state found during the initial audit. It does n
 
 ## Current development stage
 
-The database foundation is substantially designed and migrated. The Python application layer now includes the Streamlit app shell, navigation foundation, shared UI helpers, real-data empty states, fleet setup write workflows, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, Bus Accounts performance reporting, backups, exports, setup warnings, Business Presets and a consolidated Business Balance view. Several advanced financial write workflows are still incomplete.
+The database foundation is substantially designed and migrated. The Python application layer now includes the Streamlit app shell, navigation foundation, shared UI helpers, real-data empty states, fleet setup write workflows, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, Driver Money, loan management, owner-money workflows, Bus Accounts performance reporting, backups, exports, setup warnings, Business Presets, a consolidated Business Balance view and a Home business-performance chart.
 
 ## Environment found
 
@@ -64,7 +64,7 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 - `services/dashboard_service.py`
   - Provides period financial summary, bus status counts, bus performance and recent activity helpers.
 - `services/bus_account_service.py`
-  - Provides centralized bus contribution, shared-cost, trend, category and recent bus-transaction calculations.
+  - Provides centralized bus contribution, shared-cost, salary attribution, trend, category and recent bus-transaction calculations.
 - `services/driver_service.py`
   - Provides driver overview and available employment lookup.
   - Creates drivers with an initial active employment record.
@@ -88,9 +88,13 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 - `services/reminder_service.py`
   - Provides due maintenance, document expiry, deactivated bus and open reminder helpers.
 - `services/preset_service.py`
-  - Provides Business Presets for reporting baseline, Airtel collection destination, cashing rates, schedule rules, salary presets and reminder-warning days.
+  - Provides Business Presets for reporting baseline, Airtel collection destination, cashing rates, schedule rules, salary presets, driver advance limit and reminder-warning days.
 - `services/loan_service.py`
-  - Provides a safe unidentified business-loan repayment workflow that records financing payments separately from operating expenses.
+  - Provides business-loan registration, repayment, owner-funded lender payment, owner drawing, owner loan and historical loan-reclassification workflows.
+- `services/driver_money_service.py`
+  - Provides driver salary previews, advance caps, advance recovery allocation, salary recording/cancellation and historical salary-reclassification helpers.
+- `services/performance_service.py`
+  - Provides one centralized operating-performance definition for Home and summary cards.
 - `tests/test_connection.py`
   - Read-only database connectivity and core-table check.
 - `tests/test_bus_service.py`
@@ -102,15 +106,17 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 - `tests/test_fleet_history.py`, `tests/test_smart_cashing_service.py`
   - Effective-dated bus history and smart cashing calculation tests.
 - `tests/test_dashboard_charts.py`
-  - Chart scaling and zero-baseline checks.
+  - Bus chart scaling and zero-baseline checks, plus business-performance chart data checks.
 - `tests/test_expense_service.py`
   - Expense validation checks before database writes.
 - `tests/test_bus_account_service.py`, `tests/test_bus_accounts_page.py`, `tests/test_record_expense_page.py`
   - Bus contribution, shared-cost separation, Bus Accounts UI and Record Expense UI behavior checks.
+- `tests/test_driver_money_service.py`, `tests/test_business_performance.py`, `tests/test_money_management_pages.py`
+  - Driver salary/recovery helpers, Home operating-performance aggregation, chart behavior and Driver Money/Loans/Owner Money page-state checks.
 - `tests/inspect_buses.py`
   - Ad hoc schema inspection script for buses and routes.
 - `migrations/`
-  - Numbered SQL migrations `001` through `028`.
+  - Numbered SQL migrations `001` through `029`.
   - A corrected SQL integrity-test script.
 - `docs/SmartFleet_Database_Schema_V1_Technical_Reference.docx`
   - Existing source-derived database reference.
@@ -176,18 +182,18 @@ PostgreSQL functions currently installed:
 | `owner_loans` | 1 | Owner Loan Account |
 | `cashing_rates` | 4 | NORMAL_DAY K600 and SUNDAY K300, with current and October baseline history |
 | `cashing_schedules` | 2 | Thursday and Sunday |
-| `business_settings` | 2 | Reporting baseline and Airtel collection destination |
+| `business_settings` | 3 | Reporting baseline, Airtel collection destination and driver advance limit |
 | `cashing_schedule_rules` | 2 | Thursday and Sunday collection coverage presets |
 | `driver_salary_presets` | 1 | Default monthly salary preset |
 | `reminder_presets` | 3 | Maintenance, document expiry and overdue cashing warning windows |
 | `transfer_fee_rules` | 15 | Airtel-to-Airtel and Airtel-to-Bank fee bands |
-| All operational transaction tables | 0 | No live cashing, expenses, payroll, maintenance, loan repayments or reminders |
+| October operational transactions | 5 | Three cashing receipts totaling K16,200; one remaining ordinary expense totaling K2,000; one reclassified K15,000 loan repayment |
 
 ## Tested
 
 ### Migration recreation
 
-A uniquely named temporary PostgreSQL database was created, all numbered migrations `001` through `028` were applied successfully, and the temporary database was dropped afterward.
+A uniquely named temporary PostgreSQL database was created, all numbered migrations `001` through `029` were applied successfully, and the temporary database was dropped afterward.
 
 Result: pass.
 
@@ -195,7 +201,7 @@ Result: pass.
 
 | Command | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 63 tests |
+| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 76 tests |
 | `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Historical failure because `pytest` is not installed |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed because running the file by path cannot import `database` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed because running the file by path cannot import `services` |
@@ -203,14 +209,22 @@ Result: pass.
 | `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed. Bus rows have expected shape |
 | `.venv\Scripts\python.exe -m compileall app.py app_pages services components utils tests scripts` | Passed |
 | Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Record Cashing, Record Expense, Accounts, Business Presets, Backups, Reports and Reminders |
-| `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `028` to a disposable database and dropped it |
+| `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `029` to a disposable database and dropped it |
 | `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Created a disposable database, inserted one route and bus, recorded one K1,800 smart cashing collection, corrected it to K1,700 and verified one matching ledger receipt |
 | `.venv\Scripts\python.exe scripts\smoke_expense_finance.py` | Passed. Created a disposable database, recorded bus-specific expenses, shared maintenance parts and a loan repayment, verified Bus Accounts and Business Balance classification, then dropped the database |
+| `.venv\Scripts\python.exe scripts\smoke_money_workflows.py` | Passed. Created a disposable database, recorded driver advance/salary recovery, loan registration, business repayment, owner-paid repayment, owner drawing and owner repayment, then verified operating-profit classification |
 | Disposable cashing smoke test | Passed. Created a temporary database, migrated through `023`, inserted one temporary route and bus, recorded a K1,800 cashing collection, verified collection/remittance totals, then dropped the database |
 | Direct cashing disposable smoke test | Passed against `smartfleet_demo`; inserted, edited and deleted one future-dated test collection and verified no smoke rows remained |
 | Disposable expense smoke test | Passed. Created a temporary database, migrated through `023`, inserted a temporary route and bus, recorded one general expense and one bus expense, verified expense and ledger totals, then dropped the database |
 | Disposable edit/delete smoke test | Passed. Created a temporary database, migrated through `024`, verified opening balance update, expense edit/delete and cashing edit/delete, then dropped the database |
-| Backup service check | Passed. Created and verified `smartfleet_20261012_235450.dump` before applying migrations `026` and `027`, and `smartfleet_20261012_235728.dump` before applying migration `028` |
+| Backup service check | Passed. Created and verified `smartfleet_20261013_201402.dump` before applying migration `029`, and `smartfleet_20261013_203350.dump` before the historical correction |
+
+### Historical correction performed
+
+- Expense `9`, linked ledger transaction `24`, dated 2026-10-04 for K15,000, was reclassified from ordinary Office & Administration expense to an unidentified business-loan repayment.
+- The original cash outflow was preserved as ledger transaction `24`; no duplicate K15,000 payment was created.
+- The repayment is stored as `loan_repayments.id = 5`, `payment_source = BUSINESS_ACCOUNT`, `loan_id = NULL`, with provenance notes naming Village Banking and Carecoop from the original record.
+- Expense `10`, linked ledger transaction `25`, dated 2026-10-05 for K2,000, remains an ordinary expense for now because the database did not prove which AIG driver employment existed on that salary date. No salary replacement was created.
 
 Note: the AppTest process printed a Windows temporary-folder cleanup warning after all page checks passed. The page checks themselves succeeded.
 
@@ -226,7 +240,7 @@ Immediate planned work after the initial app foundation:
 1. Expand driver employment and bus assignment management beyond initial setup.
 2. Add correction and settlement UI for existing cashing obligations.
 3. Expand Record Cashing with optional import from spreadsheet-style notes.
-4. Add dedicated UI for driver advances, driver salaries, owner drawings and richer loan management; ordinary Record Expense now blocks these as generic expenses.
+4. Add edit flows for salary/advance/loan/owner-money records beyond the guarded salary cancellation workflow.
 5. Implement maintenance scheduling and reminders.
 6. Add isolated database integration tests for data-changing workflows.
 7. Add browser/mobile verification for bottom navigation and narrow viewport behavior.

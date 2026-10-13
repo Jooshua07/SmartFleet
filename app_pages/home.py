@@ -3,14 +3,15 @@ import streamlit as st
 from components.cards import empty_state
 from services.dashboard_service import (
     get_activity_date_bounds,
-    get_bus_performance,
     get_bus_status_counts,
     get_financial_summary,
     get_recent_activity,
 )
+from services.performance_service import get_business_performance_series
+from services.preset_service import get_reporting_baseline_date
 from services.reminder_service import get_open_reminders
 from services.validation_service import get_data_validation_warnings
-from utils.dashboard_charts import build_bus_performance_chart, build_bus_performance_chart_data
+from utils.dashboard_charts import build_business_performance_chart, build_business_performance_chart_data
 from utils.dates import subtract_months, today_lusaka
 from utils.formatting import format_date, format_whole_kwacha
 
@@ -21,7 +22,6 @@ def _load_home_data(start_date, end_date):
         "summary": get_financial_summary(start_date, end_date),
         "warnings": get_data_validation_warnings(),
         "counts": get_bus_status_counts(),
-        "performance": get_bus_performance(start_date, end_date),
         "reminders": get_open_reminders(limit=3),
         "activity": get_recent_activity(limit=5),
     }
@@ -70,6 +70,44 @@ def _selected_period_bounds():
     return start, end
 
 
+@st.cache_data(ttl=30, max_entries=32, show_spinner=False)
+def _load_performance_series(start_date, end_date, grouping):
+    return get_business_performance_series(start_date, end_date, grouping)
+
+
+def _chart_bounds():
+    today = today_lusaka()
+    baseline = get_reporting_baseline_date()
+    mode = st.segmented_control(
+        "Business performance period",
+        ["Daily", "Weekly", "Date Range"],
+        default="Daily",
+        key="home_business_performance_period",
+    )
+    if mode == "Date Range":
+        start = st.date_input(
+            "Chart start",
+            value=baseline,
+            min_value=baseline,
+            max_value=today,
+            format="DD/MM/YYYY",
+            key="home_business_chart_start",
+        )
+        end = st.date_input(
+            "Chart end",
+            value=today,
+            min_value=baseline,
+            max_value=today,
+            format="DD/MM/YYYY",
+            key="home_business_chart_end",
+        )
+        if start > end:
+            st.error("Chart start date must be before chart end date.", icon=":material/error:")
+            st.stop()
+        return start, end, "Daily"
+    return baseline, today, mode
+
+
 start_date, end_date = _selected_period_bounds()
 st.caption(f"{format_date(start_date)} to {format_date(end_date)}")
 
@@ -116,20 +154,23 @@ with st.container(border=True):
     else:
         st.write(f"{counts['ACTIVE']} buses active | {counts['INACTIVE']} buses deactivated")
 
-st.subheader("Bus revenue vs expenses")
-performance = home_data["performance"]
-if performance:
-    chart_data = build_bus_performance_chart_data(performance)
-    st.altair_chart(
-        build_bus_performance_chart(chart_data),
-        alt="Revenue and expenses by registered bus for the selected period",
-    )
-else:
-    empty_state(
-        "No bus performance yet",
-        "Register buses and record cashing or expenses to populate this chart.",
-        ":material/bar_chart:",
-    )
+with st.container(border=True):
+    st.subheader("Business Performance")
+    chart_start, chart_end, chart_grouping = _chart_bounds()
+    st.caption(f"{format_date(chart_start)} to {format_date(chart_end)}")
+    series = _load_performance_series(chart_start, chart_end, chart_grouping)
+    chart_data = build_business_performance_chart_data(series)
+    if chart_data.empty or chart_data["Amount"].abs().sum() == 0:
+        empty_state(
+            "No performance records yet",
+            "Record cashing, expenses or payroll to populate this chart.",
+            ":material/monitoring:",
+        )
+    else:
+        st.altair_chart(
+            build_business_performance_chart(chart_data),
+            alt="Recorded revenue, operating expenses and operating profit or loss over time",
+        )
 
 with st.container(border=True):
     with st.container(horizontal=True, horizontal_alignment="distribute"):

@@ -33,8 +33,15 @@ def get_bus_contribution_summary(start_date: date, end_date: date) -> dict:
                         e.bus_id,
                         SUM(e.amount) AS direct_costs
                     FROM expenses e
+                    JOIN expense_categories ec ON ec.id = e.category_id
+                    LEFT JOIN financial_transactions ft ON ft.id = e.financial_transaction_id
                     WHERE e.scope = 'BUS'
                       AND e.expense_date BETWEEN %s AND %s
+                      AND ec.name NOT IN ('Driver Advances', 'Driver Salaries', 'Loan Repayments', 'Owner Drawings')
+                      AND (
+                        e.payment_source = 'OWNER_PERSONAL'
+                        OR ft.transaction_type IN ('EXPENSE', 'TRANSFER_FEE', 'OTHER')
+                      )
                     GROUP BY e.bus_id
                 ),
                 allocated_expenses AS (
@@ -43,9 +50,45 @@ def get_bus_contribution_summary(start_date: date, end_date: date) -> dict:
                         SUM(ea.allocated_amount) AS allocated_costs
                     FROM expense_allocations ea
                     JOIN expenses e ON e.id = ea.expense_id
+                    JOIN expense_categories ec ON ec.id = e.category_id
+                    LEFT JOIN financial_transactions ft ON ft.id = e.financial_transaction_id
                     WHERE e.scope = 'MULTI_BUS'
                       AND e.expense_date BETWEEN %s AND %s
+                      AND ec.name NOT IN ('Driver Advances', 'Driver Salaries', 'Loan Repayments', 'Owner Drawings')
+                      AND (
+                        e.payment_source = 'OWNER_PERSONAL'
+                        OR ft.transaction_type IN ('EXPENSE', 'TRANSFER_FEE', 'OTHER')
+                      )
                     GROUP BY ea.bus_id
+                ),
+                salary_assignments AS (
+                    SELECT
+                        ds.id AS salary_id,
+                        ds.prorated_salary,
+                        da.bus_id
+                    FROM driver_salaries ds
+                    JOIN driver_assignments da
+                        ON da.employment_id = ds.employment_id
+                       AND da.assignment_type = 'PERMANENT'
+                       AND da.start_date <= (make_date(ds.salary_year, ds.salary_month, 1)
+                            + INTERVAL '1 month - 1 day')::date
+                       AND (da.end_date IS NULL OR da.end_date >= make_date(ds.salary_year, ds.salary_month, 1))
+                    WHERE ds.status <> 'CANCELLED'
+                      AND make_date(ds.salary_year, ds.salary_month, 1) BETWEEN %s AND %s
+                ),
+                unique_salary_bus AS (
+                    SELECT
+                        salary_id,
+                        MIN(bus_id) AS bus_id,
+                        MIN(prorated_salary) AS salary_cost
+                    FROM salary_assignments
+                    GROUP BY salary_id
+                    HAVING COUNT(DISTINCT bus_id) = 1
+                ),
+                salary_by_bus AS (
+                    SELECT bus_id, SUM(salary_cost) AS salary_costs
+                    FROM unique_salary_bus
+                    GROUP BY bus_id
                 )
                 SELECT
                     b.id AS bus_id,
@@ -54,30 +97,78 @@ def get_bus_contribution_summary(start_date: date, end_date: date) -> dict:
                     COALESCE(rb.recorded_revenue, 0) AS recorded_revenue,
                     COALESCE(rb.confirmed_revenue, 0) AS confirmed_revenue,
                     COALESCE(rb.estimated_revenue, 0) AS estimated_revenue,
-                    COALESCE(de.direct_costs, 0) AS direct_costs,
+                    COALESCE(de.direct_costs, 0) + COALESCE(sb.salary_costs, 0) AS direct_costs,
                     COALESCE(ae.allocated_costs, 0) AS allocated_costs,
-                    COALESCE(de.direct_costs, 0) + COALESCE(ae.allocated_costs, 0) AS attributed_costs,
+                    COALESCE(de.direct_costs, 0) + COALESCE(ae.allocated_costs, 0)
+                        + COALESCE(sb.salary_costs, 0) AS attributed_costs,
                     COALESCE(rb.recorded_revenue, 0)
                         - COALESCE(de.direct_costs, 0)
-                        - COALESCE(ae.allocated_costs, 0) AS recorded_contribution
+                        - COALESCE(ae.allocated_costs, 0)
+                        - COALESCE(sb.salary_costs, 0) AS recorded_contribution
                 FROM buses b
                 LEFT JOIN revenue_by_bus rb ON rb.bus_id = b.id
                 LEFT JOIN direct_expenses de ON de.bus_id = b.id
                 LEFT JOIN allocated_expenses ae ON ae.bus_id = b.id
+                LEFT JOIN salary_by_bus sb ON sb.bus_id = b.id
                 ORDER BY b.registration_number;
                 """,
-                (start_date, end_date, start_date, end_date, start_date, end_date),
+                (
+                    start_date,
+                    end_date,
+                    start_date,
+                    end_date,
+                    start_date,
+                    end_date,
+                    start_date,
+                    end_date,
+                ),
             )
             buses = cursor.fetchall()
 
             cursor.execute(
                 """
-                SELECT COALESCE(SUM(amount), 0) AS shared_general_costs
-                FROM expenses
-                WHERE scope = 'GENERAL'
-                  AND expense_date BETWEEN %s AND %s;
+                WITH general_expenses AS (
+                    SELECT COALESCE(SUM(e.amount), 0) AS amount
+                    FROM expenses e
+                    JOIN expense_categories ec ON ec.id = e.category_id
+                    LEFT JOIN financial_transactions ft ON ft.id = e.financial_transaction_id
+                    WHERE e.scope = 'GENERAL'
+                      AND e.expense_date BETWEEN %s AND %s
+                      AND ec.name NOT IN ('Driver Advances', 'Driver Salaries', 'Loan Repayments', 'Owner Drawings')
+                      AND (
+                        e.payment_source = 'OWNER_PERSONAL'
+                        OR ft.transaction_type IN ('EXPENSE', 'TRANSFER_FEE', 'OTHER')
+                      )
+                ),
+                salary_ids_with_one_bus AS (
+                    SELECT ds.id
+                    FROM driver_salaries ds
+                    JOIN driver_assignments da
+                        ON da.employment_id = ds.employment_id
+                       AND da.assignment_type = 'PERMANENT'
+                       AND da.start_date <= (make_date(ds.salary_year, ds.salary_month, 1)
+                            + INTERVAL '1 month - 1 day')::date
+                       AND (da.end_date IS NULL OR da.end_date >= make_date(ds.salary_year, ds.salary_month, 1))
+                    WHERE ds.status <> 'CANCELLED'
+                      AND make_date(ds.salary_year, ds.salary_month, 1) BETWEEN %s AND %s
+                    GROUP BY ds.id
+                    HAVING COUNT(DISTINCT da.bus_id) = 1
+                ),
+                unallocated_salaries AS (
+                    SELECT COALESCE(SUM(ds.prorated_salary), 0) AS amount
+                    FROM driver_salaries ds
+                    WHERE ds.status <> 'CANCELLED'
+                      AND make_date(ds.salary_year, ds.salary_month, 1) BETWEEN %s AND %s
+                      AND NOT EXISTS (
+                        SELECT 1
+                        FROM salary_ids_with_one_bus one_bus
+                        WHERE one_bus.id = ds.id
+                      )
+                )
+                SELECT general_expenses.amount + unallocated_salaries.amount AS shared_general_costs
+                FROM general_expenses, unallocated_salaries;
                 """,
-                (start_date, end_date),
+                (start_date, end_date, start_date, end_date, start_date, end_date),
             )
             shared = cursor.fetchone()
 

@@ -4,7 +4,7 @@ Last updated: 2026-10-13
 
 ## Current testing state
 
-The repository now has a reliable `unittest` baseline plus focused Streamlit AppTest coverage for Record Cashing, Record Expense, Bus Accounts and page-load sweeps for the main workflows.
+The repository now has a reliable `unittest` baseline plus focused Streamlit AppTest coverage for Record Cashing, Record Expense, Bus Accounts, Driver Money, Loans, Owner Money and page-load sweeps for the main workflows.
 
 Current blockers:
 
@@ -16,7 +16,7 @@ Current blockers:
 
 | Command | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 63 tests |
+| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 76 tests |
 | `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Historical failure: `No module named pytest` |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed: `ModuleNotFoundError: No module named 'database'` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed: `ModuleNotFoundError: No module named 'services'` |
@@ -24,21 +24,23 @@ Current blockers:
 | `.venv\Scripts\python.exe -m tests.test_bus_service` | Passed. Bus rows have expected shape |
 | `.venv\Scripts\python.exe -m compileall app.py app_pages services components utils tests scripts` | Passed |
 | Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Record Cashing, Record Expense, Accounts, Business Presets, Backups, Reports and Reminders |
-| `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `028` to a disposable database and dropped it |
-| `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Temporary database migrated through `028`, one test bus was created, smart cashing was recorded, corrected from K1,800 to K1,700, and one matching ledger receipt was verified |
-| `.venv\Scripts\python.exe scripts\smoke_expense_finance.py` | Passed. Temporary database migrated through `028`; AIH-specific expenses, shared maintenance parts and a loan repayment were recorded; Bus Accounts and Business Balance classifications were verified |
+| `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `029` to a disposable database and dropped it |
+| `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Temporary database migrated through `029`, one test bus was created, smart cashing was recorded, corrected from K1,800 to K1,700, and one matching ledger receipt was verified |
+| `.venv\Scripts\python.exe scripts\smoke_expense_finance.py` | Passed. Temporary database migrated through `029`; AIH-specific expenses, shared maintenance parts and a loan repayment were recorded; Bus Accounts and Business Balance classifications were verified |
+| `.venv\Scripts\python.exe scripts\smoke_money_workflows.py` | Passed. Temporary database migrated through `029`; driver advance/salary recovery, business loan repayment, owner-paid lender repayment, owner drawing and business repayment to owner were verified |
 | Disposable cashing smoke test | Passed. Temporary database migrated through `023`, one test bus was created, K1,800 cashing was recorded and verified, then the database was dropped |
 | Direct and smart cashing unit/AppTest coverage | Passed. One-bus, multi-bus, missing-value, form-clear, smart summary, smart correction, locked correction/delete, payment-history and open-obligation page-state cases are covered |
 | Expense and Bus Accounts coverage | Passed. General Business and Specific Bus expense UI, historical bus selection, title limits, restricted categories, default payment account, scope changes, shared-cost separation and Bus Accounts page state are covered |
 | Disposable expense smoke test | Passed. Temporary database migrated through `023`, one general expense and one bus expense were recorded and verified against matching outbound ledger rows, then the database was dropped |
 | Disposable edit/delete smoke test | Passed. Temporary database migrated through `024`, opening balance update, expense edit/delete and cashing edit/delete were verified, then the database was dropped |
-| Backup service check | Passed. Created `smartfleet_20261012_235450.dump` before migrations `026`/`027` and `smartfleet_20261012_235728.dump` before migration `028`; both verified with PostgreSQL restore-list output |
+| Money-management AppTest coverage | Passed. Driver Money, Loans and Owner Money render realistic salary, advance, repayment and owner-personal-payment workflows |
+| Backup service check | Passed. Created `smartfleet_20261013_201402.dump` before migration `029` and `smartfleet_20261013_203350.dump` before the historical correction; both verified with PostgreSQL restore-list output |
 
 The AppTest command printed a Windows temporary-folder cleanup warning after all page checks passed. Treat this as a test-harness cleanup limitation unless it reappears as an app exception.
 
 ## Migration recreation check
 
-A temporary database with a unique name was created. Migrations `001` through `028` were applied successfully with `scripts/verify_migrations.py`, then the temporary database was dropped.
+A temporary database with a unique name was created. Migrations `001` through `029` were applied successfully with `scripts/verify_migrations.py`, then the temporary database was dropped.
 
 Result: pass.
 
@@ -100,6 +102,8 @@ Use for:
 - reminders.
 - payroll and advance recovery.
 - loan repayments.
+- owner-paid lender repayment without business cash movement.
+- Home operating-performance aggregation.
 - transfer fee calculations.
 - constraint and trigger failures.
 

@@ -63,6 +63,24 @@ PAGES = [
         icon=":material/download:",
         visibility="hidden",
     ),
+    st.Page(
+        "app_pages/driver_money.py",
+        title="Driver Money",
+        icon=":material/id_card:",
+        visibility="hidden",
+    ),
+    st.Page(
+        "app_pages/loans.py",
+        title="Loans",
+        icon=":material/credit_card:",
+        visibility="hidden",
+    ),
+    st.Page(
+        "app_pages/owner_money.py",
+        title="Owner Money",
+        icon=":material/account_balance_wallet:",
+        visibility="hidden",
+    ),
 ]
 
 

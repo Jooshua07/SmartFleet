@@ -4,7 +4,7 @@ Last updated: 2026-10-13
 
 ## Current architecture
 
-SmartFleet currently has a strong PostgreSQL schema and a Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, Bus Accounts, backups, exports, Business Presets and a consolidated Business Balance view. Several advanced business write workflows remain planned.
+SmartFleet currently has a strong PostgreSQL schema and a Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, Driver Money, Loans, Owner Money, Bus Accounts, backups, exports, Business Presets, a consolidated Business Balance view and a Home operating-performance chart.
 
 ```text
 User browser
@@ -30,7 +30,9 @@ services/cashing_service.py     direct cashing collection summaries and writes
 services/smart_cashing_service.py expected cashing, allocations and obligations
 services/bus_account_service.py recorded bus contribution and shared-cost reporting
 services/preset_service.py      business settings, rates, salary and reminder presets
-services/loan_service.py        loan repayment classification helpers
+services/driver_money_service.py payroll, advances and recovery allocation
+services/loan_service.py        business loans, repayments and owner-money helpers
+services/performance_service.py operating-performance reporting definitions
 tests/                          unittest and Streamlit AppTest coverage
 migrations/                     canonical SQL schema history
 docs/                           database reference, UI references and project docs
@@ -113,12 +115,14 @@ Current and planned service modules:
 | `services/cashing_service.py` | Direct cashing, Airtel Money collection destination, collections, remittances and ledger links |
 | `services/smart_cashing_service.py` | Sunday/Thursday cashing coverage, expected cashing, standard/manual allocations, obligations and obligation repayments |
 | `services/expense_service.py` | Expense entry, allocation and ledger links |
-| `services/bus_account_service.py` | Recorded revenue, attributed bus costs, shared general costs and Bus Accounts drill-downs |
+| `services/bus_account_service.py` | Recorded revenue, attributed bus costs, salary attribution, shared general costs and Bus Accounts drill-downs |
 | `services/dashboard_service.py` | Dashboard summaries, status counts, performance and activity |
 | `services/finance_service.py` | Collection, expense, consolidated Business Balance and business ledger reads |
 | `services/reminder_service.py` | Due maintenance, document expiries, deactivated buses and stored reminders |
-| `services/preset_service.py` | Reporting baseline, cashing-rate history, cashing schedule, salary and reminder presets |
-| `services/loan_service.py` | Business loan repayment classification helpers |
+| `services/preset_service.py` | Reporting baseline, cashing-rate history, cashing schedule, salary presets, driver advance limit and reminder presets |
+| `services/driver_money_service.py` | Driver salary previews, advance cap enforcement, salary recording/cancellation and recovery allocation |
+| `services/loan_service.py` | Business loan registration, repayments, owner drawings, owner loans and owner-paid lender settlement |
+| `services/performance_service.py` | Central operating revenue, expense and profit/loss definitions for Home and summaries |
 
 ## PostgreSQL data-access layer
 
@@ -230,7 +234,33 @@ The UI title must be `Record Expense`. The first implemented flow supports busin
 10. UI shows a success message and recent expenses reflects the new record.
 ```
 
-Ordinary expense recording blocks loan repayments, recoverable driver advances, driver salaries and owner drawings so they cannot be silently saved as generic operating expenses. Loan repayment has a minimal financing workflow in `services.loan_service`. Driver advance, salary and owner drawing UI workflows remain planned.
+Ordinary expense recording blocks loan repayments, recoverable driver advances, driver salaries and owner drawings so they cannot be silently saved as generic operating expenses. The Record Expense page links users to the dedicated loan, driver-money and owner-money workflows instead of creating a second payment system.
+
+## Typical data flow: driver salary and advances
+
+```text
+1. User opens More > Management > Driver Money and chooses an existing driver employment.
+2. For advances, the service checks active employment dates and the configured cumulative outstanding advance limit, currently defaulting to K1,000.
+3. An advance creates one `DRIVER_ADVANCE` outbound ledger movement and one `driver_advances` row. It reduces Business Balance but is not counted as operating expense.
+4. For salary, the service calculates the monthly salary from driver-specific/default presets, employment dates and proration rules.
+5. Outstanding advances are suggested for recovery oldest-first, limited by earned salary so net salary cannot become negative.
+6. A salary creates one `driver_salaries` row. Only the remaining net salary creates a `DRIVER_SALARY` cash movement.
+7. Operating payroll cost is recognized from the salary record once, using the payroll period rather than the advance payment date.
+8. Bus attribution uses historical permanent assignments only when one reliable bus is known for the salary period; otherwise the cost remains shared.
+```
+
+## Typical data flow: business loans and owner money
+
+```text
+1. User opens More > Management > Loans to add known business loans or record repayments.
+2. Business-funded principal repayments create a `LOAN_REPAYMENT` outbound ledger movement and reduce loan principal; principal is not an operating expense.
+3. Interest/fees, when recorded separately, are treated as financing costs rather than loan principal.
+4. User opens More > Management > Owner Money for owner drawings, owner loans to the business, owner-paid lender payments and business repayments to the owner.
+5. Owner drawings reduce Business Balance but are not operating expenses and are not bus costs.
+6. Owner loans to the business increase Business Balance and increase the amount owed to the owner, without counting as operating revenue.
+7. Owner-paid external loan repayments reduce the external loan and increase the amount owed to the owner without inventing any business cash inflow or outflow.
+8. Business repayments to the owner reduce Business Balance and owner-loan balance without creating another lender payment.
+```
 
 ## Typical data flow: Bus Accounts
 
@@ -245,7 +275,8 @@ Bus Accounts is not a Cash/Airtel/Bank account manager. It is a recorded bus-per
    minus direct bus-specific operating costs
    minus verified bus-allocated operating costs.
 5. Finance/owner drawings/loan principal and recoverable advances are excluded from bus contribution.
-6. Individual bus detail uses `get_bus_account_detail` for trend, category and recent bus-related transactions.
+6. Driver salary cost is attributed to a bus only when historical assignment data supports it; otherwise it is shown as shared cost.
+7. Individual bus detail uses `get_bus_account_detail` for trend, category and recent bus-related transactions.
 ```
 
 If a cashing amount is estimated or manually adjusted rather than confirmed actual, Bus Accounts keeps it visible as recorded revenue but labels the page with the appropriate caveat. Unallocated collection differences are not invented as bus revenue.
@@ -258,7 +289,18 @@ Phone-first navigation target:
 - More quick actions: Record Cashing, Record Expense, Add Bus, Drivers, Reminders.
 - Buses page internal tabs: Buses, Routes, Drivers.
 - Finance page internal tabs: General, Collections, Expenses, Balances.
-- More > Management now links to Bus Accounts instead of individual payment-account management.
+- More > Management links to Bus Accounts, Driver Money, Loans and Owner Money.
+
+## Typical data flow: Home business performance
+
+```text
+1. Home reads the reporting baseline date, currently 1 October 2026.
+2. `services.performance_service` sums gross operating receipts from cashing collections without double-counting remittance rows.
+3. Operating expenses include ordinary operating expenses, bus-specific expenses, salary expense recognized through payroll and eligible financing costs.
+4. Loan principal, owner drawings, owner loans, owner repayments and driver-advance disbursements are excluded from operating expenses.
+5. Net Profit/Loss is calculated as Revenue minus Operating Expenses and can be negative.
+6. Daily and weekly chart controls use independent Streamlit state keys, so they do not change the rest of Home's reporting period.
+```
 
 The current app uses hidden `st.navigation` plus a bottom action row rendered with `st.bottom`. This avoids legacy `pages/` auto-discovery and avoids fragile CSS selectors tied to Streamlit internals. Browser/mobile verification is still required before this is considered final.
 

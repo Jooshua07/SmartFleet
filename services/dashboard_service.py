@@ -1,52 +1,14 @@
 from datetime import date
-from decimal import Decimal
 
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
 from services.bus_account_service import get_bus_contribution_summary
+from services.performance_service import get_operating_summary
 
 
 def get_financial_summary(start_date: date, end_date: date) -> dict:
-    with get_connection() as conn:
-        with conn.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """
-                SELECT COALESCE(SUM(actual_amount), 0) AS revenue
-                FROM remittances r
-                JOIN remittance_collections c ON c.id = r.collection_id
-                WHERE c.collection_date BETWEEN %s AND %s;
-                """,
-                (start_date, end_date),
-            )
-            revenue = cursor.fetchone()["revenue"] or Decimal("0")
-
-            cursor.execute(
-                """
-                SELECT COALESCE(SUM(amount), 0) AS expenses
-                FROM financial_transactions
-                WHERE transaction_date BETWEEN %s AND %s
-                  AND direction = 'OUT'
-                  AND transaction_type IN ('EXPENSE', 'DRIVER_SALARY', 'TRANSFER_FEE', 'OTHER');
-                """,
-                (start_date, end_date),
-            )
-            expenses = cursor.fetchone()["expenses"] or Decimal("0")
-
-            cursor.execute(
-                """
-                SELECT COALESCE(SUM(expected_amount - actual_amount), 0) AS pending
-                FROM remittances r
-                JOIN remittance_collections c ON c.id = r.collection_id
-                WHERE c.collection_date BETWEEN %s AND %s
-                  AND expected_amount IS NOT NULL
-                  AND expected_amount > actual_amount;
-                """,
-                (start_date, end_date),
-            )
-            pending = cursor.fetchone()["pending"] or Decimal("0")
-
-    return {"revenue": revenue, "expenses": expenses, "pending_remittances": pending}
+    return get_operating_summary(start_date, end_date)
 
 
 def get_bus_status_counts() -> dict:

@@ -752,7 +752,93 @@ This reference covers significant code functions that exist today, plus the inst
   - amount must be positive.
   - paid-to and notes are required.
   - ledger transaction type is `LOAN_REPAYMENT` and direction is `OUT`.
-- Used by: future loan repayment UI.
+- Used by: compatibility callers and the dedicated Loans workflow.
+
+### `services.driver_money_service`
+
+- File: `services/driver_money_service.py`
+- Purpose: Manage driver salary previews, salary advances, recovery allocation and payroll records without mixing them into ordinary expenses.
+- Main functions:
+  - `list_driver_money_profiles`
+  - `get_driver_money_detail`
+  - `get_salary_preview`
+  - `record_driver_advance`
+  - `record_driver_salary`
+  - `cancel_driver_salary`
+  - `reclassify_expense_as_driver_salary`
+- Database tables accessed:
+  - `drivers`
+  - `driver_employments`
+  - `driver_assignments`
+  - `driver_salary_presets`
+  - `driver_advances`
+  - `driver_salaries`
+  - `salary_advance_recoveries`
+  - `salary_deduction_allocations`
+  - `financial_accounts`
+  - `financial_transactions`
+  - `expenses`
+  - `expense_allocations`
+- Important validation:
+  - salary periods use actual employment dates and effective salary presets.
+  - outstanding advances are recovered oldest-first and cannot be recovered twice.
+  - net salary cannot become negative.
+  - the configurable outstanding advance limit defaults to K1,000 and applies cumulatively per employment.
+  - salary operating cost is recognized from the salary record once; advance disbursements are recoverable cash movements, not extra salary expense.
+- Used by: Driver Money page and controlled historical salary correction helpers.
+
+### `services.loan_service`
+
+- File: `services/loan_service.py`
+- Purpose: Manage business loans, repayments, owner drawings, owner loans to the business, owner-paid external loan settlement and historical loan reclassification.
+- Main functions:
+  - `list_business_loans`
+  - `add_business_loan`
+  - `list_loan_repayments`
+  - `record_loan_repayment`
+  - `record_owner_drawing`
+  - `record_owner_loan_to_business`
+  - `record_business_repayment_to_owner`
+  - `get_owner_money_summary`
+  - `reclassify_expense_as_loan_repayment`
+- Database tables accessed:
+  - `business_loans`
+  - `loan_repayments`
+  - `owner_loans`
+  - `owner_loan_transactions`
+  - `financial_accounts`
+  - `financial_transactions`
+  - `expenses`
+  - `expense_allocations`
+- Important validation:
+  - loan principal repayments are financing payments, not ordinary operating expenses.
+  - owner-paid lender repayments do not create a business cash movement.
+  - owner drawings reduce Business Balance but do not create an owner loan payable.
+  - business repayments to the owner cannot exceed the outstanding owner balance.
+  - known loan repayments cannot overpay recorded principal unless separate fees/interest are recorded.
+- Used by: Loans page, Owner Money page, Record Expense shortcuts and historical loan correction helpers.
+
+### `services.performance_service`
+
+- File: `services/performance_service.py`
+- Purpose: Provide one centralized operating-performance definition for Home and summary reporting.
+- Main functions:
+  - `get_operating_summary`
+  - `get_business_performance_series`
+- Database tables accessed:
+  - `remittance_collections`
+  - `remittances`
+  - `expenses`
+  - `expense_categories`
+  - `driver_salaries`
+  - `financial_transactions`
+- Important behavior:
+  - revenue is counted from gross cashing collections and is not duplicated through bus remittance rows.
+  - operating expenses include ordinary operating expenses and salary expense recognized through payroll.
+  - loan principal, owner drawings, owner loans, owner repayments, internal transfers and driver advance disbursements are excluded from operating expenses.
+  - daily series fills missing dates with zero values.
+  - weekly series uses Monday-based intervals with a partial first week beginning at the reporting baseline.
+- Used by: Home page and `services.dashboard_service.get_financial_summary`.
 
 ### `services.expense_service.get_active_expense_categories`
 
@@ -1006,6 +1092,37 @@ This reference covers significant code functions that exist today, plus the inst
   - overlapping cashing-rate effective dates are rejected.
   - unidentified loan repayments require notes.
 
+### `tests.test_driver_money_service`
+
+- File: `tests/test_driver_money_service.py`
+- Purpose: Validate driver salary-period and advance-recovery helpers without live database writes.
+- Important validation:
+  - salary month bounds.
+  - mid-month employment proration days.
+  - FIFO recovery allocation.
+  - recovery over-allocation rejection.
+
+### `tests.test_business_performance`
+
+- File: `tests/test_business_performance.py`
+- Purpose: Validate Home business-performance aggregation helpers and chart data.
+- Important validation:
+  - daily zero-activity dates.
+  - weekly partial first week from the reporting baseline.
+  - three chart lines: Revenue, Operating Expenses and Net Profit/Loss.
+  - negative net values are preserved for the chart.
+
+### `tests.test_money_management_pages`
+
+- File: `tests/test_money_management_pages.py`
+- Purpose: Use Streamlit AppTest to exercise the Driver Money, Loans and Owner Money pages with mocked realistic records.
+- Important validation:
+  - Driver Money shows salary preview, outstanding advances and salary history.
+  - advance mode shows one focused advance form.
+  - Loans shows repayment, loan list and repayment history.
+  - Add Loan accepts unknown optional terms.
+  - Owner Money exposes owner drawing, owner loan, owner-paid lender payment and business repayment workflows as distinct choices.
+
 ### `scripts.verify_migrations`
 
 - File: `scripts/verify_migrations.py`
@@ -1043,6 +1160,21 @@ This reference covers significant code functions that exist today, plus the inst
   - verifies AIH attributed costs, AIF unaffected costs, shared general costs, Business Balance, operating payments and financing-out totals.
   - drops the temporary database.
 
+### `scripts.smoke_money_workflows`
+
+- File: `scripts/smoke_money_workflows.py`
+- Purpose: Run a disposable end-to-end check for payroll, advances, loans, owner money and operating-performance classification.
+- Important validation:
+  - applies all numbered migrations.
+  - creates a route, driver, employment and bus assignment.
+  - records a K1,000 driver advance against a K2,500 salary.
+  - verifies the advance cap blocks excess outstanding advances.
+  - records salary with recovery and verifies salary cost is counted once.
+  - adds a business loan, records business-funded and owner-funded repayments.
+  - verifies owner-paid lender repayment does not move business cash.
+  - records owner drawing and business repayment to owner.
+  - verifies operating summary excludes loan principal, owner principal movements and driver advance disbursement.
+
 ### `tests.test_record_cashing_page`
 
 - File: `tests/test_record_cashing_page.py`
@@ -1061,10 +1193,12 @@ This reference covers significant code functions that exist today, plus the inst
 ### `tests.test_dashboard_charts`
 
 - File: `tests/test_dashboard_charts.py`
-- Purpose: Validate bus revenue-vs-expense chart preparation.
+- Purpose: Validate chart preparation for bus accounts and business performance.
 - Important validation:
   - amounts remain on the correct Kwacha scale.
   - chart y-axis starts from zero.
+  - business-performance data keeps Revenue, Operating Expenses and Net Profit/Loss as separate lines.
+  - negative net values are preserved for chart scaling.
 
 ### `tests.test_expense_service`
 

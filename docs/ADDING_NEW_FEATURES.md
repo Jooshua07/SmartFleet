@@ -36,11 +36,13 @@ For financial features, also classify the money movement before building UI:
 - recoverable driver advance
 - driver salary/payroll
 - loan principal repayment
+- owner-paid external loan repayment
+- owner loan to business
 - owner drawing
 - cashing/collection
 - transfer or transfer fee
 
-Do not route recoverable advances, loan principal repayments or owner drawings through the ordinary Expense workflow.
+Do not route recoverable advances, salaries, loan principal repayments, owner-paid external loan repayments or owner drawings through the ordinary Expense workflow.
 
 ## 3. Decide whether a migration is needed
 
@@ -129,23 +131,27 @@ Add the smallest useful coverage first:
 
 Use an isolated test database or transaction fixtures. Never run write tests against the shared development database.
 
-For expense, Bus Accounts and Finance changes, include scenario tests for:
+For expense, payroll, loan, owner-money, Bus Accounts and Finance changes, include scenario tests for:
 
 - General Business versus Specific Bus scope.
 - Shared/general costs remaining separate from bus contribution.
 - Exactly one linked ledger movement per expense/payment.
 - Restricted financial categories being rejected by ordinary expense recording.
 - Negative Business Balance rendering without false account warnings.
+- Driver advances reducing Business Balance without becoming an extra salary expense.
+- Salary recovery never exceeding outstanding advances and salary cost counted exactly once.
+- Owner-paid lender payments reducing lender liability without creating business cash movement.
+- Loan principal excluded from operating expenses and owner drawings excluded from bus costs.
 
 ## 9. Run regression checks
 
 At minimum:
 
 ```powershell
-.venv\Scripts\python.exe -m pytest
+.venv\Scripts\python.exe -m unittest discover -v
 ```
 
-Current baseline note: pytest is not installed yet. Add it to development requirements before relying on this command.
+Current baseline note: pytest is not installed yet. Add it to development requirements before relying on pytest commands.
 
 For schema work:
 
