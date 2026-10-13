@@ -3,6 +3,7 @@ from datetime import date
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
+from services.finance_service import get_business_balance
 
 
 def get_expense_export(start_date: date, end_date: date) -> list[dict]:
@@ -14,7 +15,7 @@ def get_expense_export(start_date: date, end_date: date) -> list[dict]:
                     e.expense_date,
                     ec.name AS category,
                     e.amount,
-                    e.description,
+                    e.description AS expense_title,
                     e.vendor_name,
                     e.reference_number,
                     e.scope,
@@ -65,27 +66,13 @@ def get_collection_export(start_date: date, end_date: date) -> list[dict]:
 
 
 def get_balance_export() -> list[dict]:
-    with get_connection() as conn:
-        with conn.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """
-                SELECT
-                    fa.name,
-                    fa.account_type,
-                    fa.opening_balance,
-                    fa.opening_balance
-                        + COALESCE(SUM(
-                            CASE
-                                WHEN ft.direction = 'IN' THEN ft.amount
-                                WHEN ft.direction = 'OUT' THEN -ft.amount
-                                ELSE 0
-                            END
-                        ), 0) AS calculated_balance
-                FROM financial_accounts fa
-                LEFT JOIN financial_transactions ft ON ft.account_id = fa.id
-                WHERE fa.active = TRUE
-                GROUP BY fa.id
-                ORDER BY fa.id;
-                """
-            )
-            return cursor.fetchall()
+    balance = get_business_balance()
+    return [
+        {"metric": "Business Balance", "amount": balance["business_balance"]},
+        {"metric": "Money In", "amount": balance["money_in"]},
+        {"metric": "Money Out", "amount": balance["money_out"]},
+        {"metric": "Collections", "amount": balance["collections"]},
+        {"metric": "Operating Payments", "amount": balance["operating_payments"]},
+        {"metric": "Financing In", "amount": balance["financing_in"]},
+        {"metric": "Financing Out", "amount": balance["financing_out"]},
+    ]

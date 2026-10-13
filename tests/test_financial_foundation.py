@@ -72,6 +72,29 @@ class FinancialFoundationTests(unittest.TestCase):
         self.assertEqual(balance["business_balance"], Decimal("-500.00"))
         self.assertEqual(balance["financing_out"], Decimal("1000.00"))
 
+    def test_business_balance_operating_query_excludes_driver_advances(self):
+        cursor = FakeCursor(
+            fetchone_rows=[
+                {
+                    "money_in": Decimal("0.00"),
+                    "money_out": Decimal("1000.00"),
+                    "collections": Decimal("0.00"),
+                    "operating_payments": Decimal("0.00"),
+                    "financing_in": Decimal("0.00"),
+                    "financing_out": Decimal("0.00"),
+                }
+            ]
+        )
+
+        with (
+            patch("services.finance_service.get_reporting_baseline_date", return_value=date(2026, 10, 1)),
+            patch("services.finance_service.get_connection", return_value=FakeConnection(cursor)),
+        ):
+            get_business_balance()
+
+        self.assertIn("'EXPENSE','DRIVER_SALARY','TRANSFER_FEE','OTHER'", cursor.executed[0][0])
+        self.assertNotIn("DRIVER_ADVANCE','OTHER", cursor.executed[0][0])
+
     def test_loan_repayments_are_classified_as_financing_payments(self):
         cursor = FakeCursor(
             fetchall_rows=[
@@ -101,6 +124,36 @@ class FinancialFoundationTests(unittest.TestCase):
 
         self.assertEqual(ledger[0]["classification"], "Financing payment")
         self.assertEqual(ledger[0]["signed_amount"], Decimal("-400.00"))
+
+    def test_driver_advances_are_recoverable_not_operating_expenses(self):
+        cursor = FakeCursor(
+            fetchall_rows=[
+                [
+                    {
+                        "id": 2,
+                        "transaction_date": date(2026, 10, 12),
+                        "transaction_type": "DRIVER_ADVANCE",
+                        "direction": "OUT",
+                        "amount": Decimal("1000.00"),
+                        "signed_amount": Decimal("-1000.00"),
+                        "classification": "Recoverable advance",
+                        "description": "Driver advance - Felix",
+                        "notes": None,
+                        "account_name": "Airtel Money",
+                        "account_type": "AIRTEL_MONEY",
+                    }
+                ]
+            ]
+        )
+
+        with (
+            patch("services.finance_service.get_reporting_baseline_date", return_value=date(2026, 10, 1)),
+            patch("services.finance_service.get_connection", return_value=FakeConnection(cursor)),
+        ):
+            ledger = get_business_ledger()
+
+        self.assertEqual(ledger[0]["classification"], "Recoverable advance")
+        self.assertEqual(ledger[0]["description"], "Driver advance - Felix")
 
     def test_cashing_rate_update_preserves_old_rate_window(self):
         cursor = FakeCursor(

@@ -11,7 +11,7 @@ This document records the actual state found during the initial audit. It does n
 
 ## Current development stage
 
-The database foundation is substantially designed and migrated. The Python application layer now includes the Streamlit app shell, navigation foundation, shared UI helpers, real-data empty states, fleet setup write workflows, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, account opening-balance management, backups, exports, setup warnings, Business Presets and a consolidated Business Balance view. Several advanced financial write workflows are still incomplete.
+The database foundation is substantially designed and migrated. The Python application layer now includes the Streamlit app shell, navigation foundation, shared UI helpers, real-data empty states, fleet setup write workflows, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, Bus Accounts performance reporting, backups, exports, setup warnings, Business Presets and a consolidated Business Balance view. Several advanced financial write workflows are still incomplete.
 
 ## Environment found
 
@@ -48,7 +48,7 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
 - `.streamlit/config.toml`
   - Initial SmartFleet theme tokens.
 - `app_pages/`
-  - Initial Home, Buses, Finance, More, Add Bus, Record Cashing, Record Expense, Reminders, Backups, Accounts and Reports pages.
+  - Initial Home, Buses, Finance, More, Add Bus, Record Cashing, Record Expense, Reminders, Backups, Bus Accounts, Business Presets and Reports pages.
 - `components/`
   - Shared layout, card and form helpers.
 - `utils/`
@@ -63,20 +63,22 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
   - Edits bus details and records effective-dated route/status history.
 - `services/dashboard_service.py`
   - Provides period financial summary, bus status counts, bus performance and recent activity helpers.
+- `services/bus_account_service.py`
+  - Provides centralized bus contribution, shared-cost, trend, category and recent bus-transaction calculations.
 - `services/driver_service.py`
   - Provides driver overview and available employment lookup.
   - Creates drivers with an initial active employment record.
   - Edits driver profile fields without changing assignment history.
 - `services/finance_service.py`
-  - Provides collection, expense, calculated account balance, consolidated Business Balance and business-ledger helpers.
+  - Provides collection, expense, consolidated Business Balance and business-ledger helpers.
 - `services/cashing_service.py`
   - Provides Airtel Money collection-destination lookup, recent collection summaries, effective-dated cashing rate lookup, legacy direct cashing compatibility, collection editing and guarded collection deletion.
 - `services/smart_cashing_service.py`
   - Calculates Sunday/Thursday collection cycles, expected cashing, standard allocations, unallocated differences, smart cashing writes and obligation repayments.
 - `services/expense_service.py`
-  - Provides active expense categories, active payment accounts, recent expense summaries and business-account expense recording/editing/deletion.
+  - Provides active operating expense categories, recent expense summaries, default business payment account use and business-account expense recording/editing/deletion.
 - `services/account_service.py`
-  - Provides account management helpers for opening balances and calculated balance warnings.
+  - Provides account management helpers and the configured default business payment account lookup.
 - `services/backup_service.py`
   - Provides in-app PostgreSQL backup creation, verification and listing.
 - `services/report_service.py`
@@ -103,6 +105,8 @@ The `.env` file is present and contains the expected database keys: `DB_HOST`, `
   - Chart scaling and zero-baseline checks.
 - `tests/test_expense_service.py`
   - Expense validation checks before database writes.
+- `tests/test_bus_account_service.py`, `tests/test_bus_accounts_page.py`, `tests/test_record_expense_page.py`
+  - Bus contribution, shared-cost separation, Bus Accounts UI and Record Expense UI behavior checks.
 - `tests/inspect_buses.py`
   - Ad hoc schema inspection script for buses and routes.
 - `migrations/`
@@ -191,7 +195,7 @@ Result: pass.
 
 | Command | Result |
 | --- | --- |
-| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 50 tests |
+| `.venv\Scripts\python.exe -m unittest discover -v` | Passed: 63 tests |
 | `.venv\Scripts\python.exe -m pytest tests\test_connection.py tests\test_bus_service.py` | Historical failure because `pytest` is not installed |
 | `.venv\Scripts\python.exe tests\test_connection.py` | Failed because running the file by path cannot import `database` |
 | `.venv\Scripts\python.exe tests\test_bus_service.py` | Failed because running the file by path cannot import `services` |
@@ -201,6 +205,7 @@ Result: pass.
 | Streamlit `AppTest` page sweep | Passed for Home, Buses, Finance, More, Record Cashing, Record Expense, Accounts, Business Presets, Backups, Reports and Reminders |
 | `.venv\Scripts\python.exe scripts\verify_migrations.py` | Passed. Applied migrations `001` through `028` to a disposable database and dropped it |
 | `.venv\Scripts\python.exe scripts\smoke_smart_cashing.py` | Passed. Created a disposable database, inserted one route and bus, recorded one K1,800 smart cashing collection, corrected it to K1,700 and verified one matching ledger receipt |
+| `.venv\Scripts\python.exe scripts\smoke_expense_finance.py` | Passed. Created a disposable database, recorded bus-specific expenses, shared maintenance parts and a loan repayment, verified Bus Accounts and Business Balance classification, then dropped the database |
 | Disposable cashing smoke test | Passed. Created a temporary database, migrated through `023`, inserted one temporary route and bus, recorded a K1,800 cashing collection, verified collection/remittance totals, then dropped the database |
 | Direct cashing disposable smoke test | Passed against `smartfleet_demo`; inserted, edited and deleted one future-dated test collection and verified no smoke rows remained |
 | Disposable expense smoke test | Passed. Created a temporary database, migrated through `023`, inserted a temporary route and bus, recorded one general expense and one bus expense, verified expense and ledger totals, then dropped the database |
@@ -221,7 +226,7 @@ Immediate planned work after the initial app foundation:
 1. Expand driver employment and bus assignment management beyond initial setup.
 2. Add correction and settlement UI for existing cashing obligations.
 3. Expand Record Cashing with optional import from spreadsheet-style notes.
-4. Expand Record Expense with owner-personal expenses and multi-bus allocation.
+4. Add dedicated UI for driver advances, driver salaries, owner drawings and richer loan management; ordinary Record Expense now blocks these as generic expenses.
 5. Implement maintenance scheduling and reminders.
 6. Add isolated database integration tests for data-changing workflows.
 7. Add browser/mobile verification for bottom navigation and narrow viewport behavior.

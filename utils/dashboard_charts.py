@@ -20,14 +20,14 @@ def build_bus_performance_chart_data(performance: list[dict]) -> pd.DataFrame:
         rows.append(
             {
                 "Bus": item["registration_number"],
-                "Type": "Revenue",
+                "Type": "Recorded Revenue",
                 "Amount": _to_float(item.get("revenue")),
             }
         )
         rows.append(
             {
                 "Bus": item["registration_number"],
-                "Type": "Expenses",
+                "Type": "Attributed Operating Costs",
                 "Amount": _to_float(item.get("expenses")),
             }
         )
@@ -51,7 +51,7 @@ def build_bus_performance_chart(chart_data: pd.DataFrame) -> alt.Chart:
                 "Type:N",
                 title="",
                 scale=alt.Scale(
-                    domain=["Revenue", "Expenses"],
+                    domain=["Recorded Revenue", "Attributed Operating Costs"],
                     range=["#2563eb", "#dc2626"],
                 ),
             ),

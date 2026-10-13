@@ -1,6 +1,6 @@
 # Adding new features to SmartFleet
 
-Last updated: 2026-10-11
+Last updated: 2026-10-13
 
 Use this guide when adding or changing SmartFleet behavior. The goal is to extend the system without breaking financial integrity or rewriting the project.
 
@@ -29,6 +29,18 @@ Inspect:
 - Existing documentation.
 
 If the schema already represents the requirement, use it. Do not add duplicate columns or parallel tables.
+
+For financial features, also classify the money movement before building UI:
+
+- ordinary operating expense
+- recoverable driver advance
+- driver salary/payroll
+- loan principal repayment
+- owner drawing
+- cashing/collection
+- transfer or transfer fee
+
+Do not route recoverable advances, loan principal repayments or owner drawings through the ordinary Expense workflow.
 
 ## 3. Decide whether a migration is needed
 
@@ -94,6 +106,7 @@ UI rules:
 - Use `st.selectbox` for longer options.
 - Do not place business logic only in UI handlers.
 - Do not display hardcoded sample values as real data.
+- Keep payment-account selectors out of everyday forms unless the business rule truly needs them. Current ordinary expenses and cashing use the configured business account internally.
 
 ## 7. Connect navigation
 
@@ -115,6 +128,14 @@ Add the smallest useful coverage first:
 - Streamlit `AppTest` tests for UI behavior where practical.
 
 Use an isolated test database or transaction fixtures. Never run write tests against the shared development database.
+
+For expense, Bus Accounts and Finance changes, include scenario tests for:
+
+- General Business versus Specific Bus scope.
+- Shared/general costs remaining separate from bus contribution.
+- Exactly one linked ledger movement per expense/payment.
+- Restricted financial categories being rejected by ordinary expense recording.
+- Negative Business Balance rendering without false account warnings.
 
 ## 9. Run regression checks
 

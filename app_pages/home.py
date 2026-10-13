@@ -85,17 +85,18 @@ with st.container(horizontal=True):
         icon=":material/bar_chart:",
     )
     st.metric(
-        "Expenses",
+        "Operating costs",
         format_whole_kwacha(summary["expenses"]),
         border=True,
         icon=":material/account_balance_wallet:",
     )
     st.metric(
-        "Profit",
+        "Recorded margin",
         format_whole_kwacha(summary["revenue"] - summary["expenses"]),
         border=True,
         icon=":material/trending_up:",
     )
+st.caption("Recorded margin excludes financing payments, owner drawings and recoverable advances.")
 
 warnings = home_data["warnings"]
 if warnings:

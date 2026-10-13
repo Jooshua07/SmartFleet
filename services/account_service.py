@@ -1,8 +1,7 @@
-from decimal import Decimal
-
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
+from services.preset_service import get_default_collection_account_type
 from utils.validation import parse_non_negative_amount
 
 
@@ -55,10 +54,26 @@ def update_opening_balance(account_id: int, opening_balance) -> dict:
             return account
 
 
+def get_default_business_payment_account() -> dict:
+    account_type = get_default_collection_account_type()
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT id, name, account_type
+                FROM financial_accounts
+                WHERE active = TRUE
+                  AND account_type = %s
+                ORDER BY id
+                LIMIT 1;
+                """,
+                (account_type,),
+            )
+            account = cursor.fetchone()
+            if account is None:
+                raise ValueError(f"No active {account_type.replace('_', ' ').title()} account is configured.")
+            return account
+
+
 def get_negative_balance_warnings() -> list[str]:
-    warnings = []
-    for account in get_accounts_for_management():
-        balance = account["calculated_balance"] or Decimal("0")
-        if balance < 0:
-            warnings.append(f"{account['name']} balance is below zero.")
-    return warnings
+    return []

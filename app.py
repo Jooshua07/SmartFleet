@@ -47,7 +47,7 @@ PAGES = [
     ),
     st.Page(
         "app_pages/accounts.py",
-        title="Accounts",
+        title="Bus Accounts",
         icon=":material/account_balance:",
         visibility="hidden",
     ),

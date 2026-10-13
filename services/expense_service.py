@@ -3,7 +3,31 @@ from datetime import date, datetime
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
+from services.account_service import get_default_business_payment_account
 from utils.validation import clean_optional_text, clean_required_text, parse_positive_amount
+
+
+RESTRICTED_EXPENSE_CATEGORIES = {
+    "Driver Advances": "Driver advances are recoverable advances. Use the driver advance workflow instead.",
+    "Driver Salaries": "Driver salaries must be recorded through the salary workflow so payroll is counted once.",
+    "Loan Repayments": "Loan repayments are financing payments. Use the loan repayment workflow instead.",
+    "Owner Drawings": "Owner drawings are not operating expenses. Use the owner drawing workflow instead.",
+}
+
+
+def is_restricted_expense_category(category_name: str | None) -> bool:
+    return category_name in RESTRICTED_EXPENSE_CATEGORIES
+
+
+def _clean_expense_title(value: str, existing_title: str | None = None) -> str:
+    title = clean_required_text(value, "Expense title")
+    if existing_title is not None and title == existing_title:
+        return title
+    if len(title) > 35:
+        raise ValueError("Expense title must be 35 characters or fewer.")
+    if len(title.split()) > 5:
+        raise ValueError("Expense title must be five words or fewer.")
+    return title
 
 
 def get_active_expense_categories() -> list[dict]:
@@ -18,6 +42,14 @@ def get_active_expense_categories() -> list[dict]:
                 """
             )
             return cursor.fetchall()
+
+
+def get_operating_expense_categories() -> list[dict]:
+    return [
+        category
+        for category in get_active_expense_categories()
+        if not is_restricted_expense_category(category["name"])
+    ]
 
 
 def get_active_payment_accounts() -> list[dict]:
@@ -105,12 +137,36 @@ def _coerce_expense_date(value) -> date:
     raise ValueError("Expense date is required.")
 
 
+def _resolve_payment_account_id(financial_account_id: int | None) -> int:
+    if financial_account_id is not None:
+        return financial_account_id
+    return get_default_business_payment_account()["id"]
+
+
+def _load_expense_category(cursor, category_id: int) -> dict:
+    cursor.execute(
+        """
+        SELECT id, name
+        FROM expense_categories
+        WHERE id = %s
+          AND active = TRUE;
+        """,
+        (category_id,),
+    )
+    category = cursor.fetchone()
+    if category is None:
+        raise ValueError("Choose an active expense category.")
+    if is_restricted_expense_category(category["name"]):
+        raise ValueError(RESTRICTED_EXPENSE_CATEGORIES[category["name"]])
+    return category
+
+
 def record_business_expense(
     expense_date: date,
     category_id: int,
     amount,
     description: str,
-    financial_account_id: int,
+    financial_account_id: int | None = None,
     scope: str = "GENERAL",
     bus_id: int | None = None,
     vendor_name: str | None = None,
@@ -119,7 +175,7 @@ def record_business_expense(
 ) -> dict:
     expense_date = _coerce_expense_date(expense_date)
     amount = parse_positive_amount(amount, "Amount")
-    description = clean_required_text(description, "Description")
+    description = _clean_expense_title(description)
 
     if scope not in {"GENERAL", "BUS"}:
         raise ValueError("Expense scope is not supported yet.")
@@ -127,20 +183,11 @@ def record_business_expense(
         raise ValueError("Choose a bus for a bus expense.")
     if scope == "GENERAL" and bus_id is not None:
         raise ValueError("General expenses cannot be linked to one bus.")
+    financial_account_id = _resolve_payment_account_id(financial_account_id)
 
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """
-                SELECT id
-                FROM expense_categories
-                WHERE id = %s
-                  AND active = TRUE;
-                """,
-                (category_id,),
-            )
-            if cursor.fetchone() is None:
-                raise ValueError("Choose an active expense category.")
+            _load_expense_category(cursor, category_id)
 
             cursor.execute(
                 """
@@ -232,7 +279,7 @@ def update_business_expense(
     category_id: int,
     amount,
     description: str,
-    financial_account_id: int,
+    financial_account_id: int | None = None,
     scope: str = "GENERAL",
     bus_id: int | None = None,
     vendor_name: str | None = None,
@@ -241,7 +288,6 @@ def update_business_expense(
 ) -> dict:
     expense_date = _coerce_expense_date(expense_date)
     amount = parse_positive_amount(amount, "Amount")
-    description = clean_required_text(description, "Description")
 
     if scope not in {"GENERAL", "BUS"}:
         raise ValueError("Expense scope is not supported yet.")
@@ -249,12 +295,13 @@ def update_business_expense(
         raise ValueError("Choose a bus for a bus expense.")
     if scope == "GENERAL" and bus_id is not None:
         raise ValueError("General expenses cannot be linked to one bus.")
+    financial_account_id = _resolve_payment_account_id(financial_account_id)
 
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 """
-                SELECT financial_transaction_id, payment_source
+                SELECT financial_transaction_id, payment_source, description
                 FROM expenses
                 WHERE id = %s
                 FOR UPDATE;
@@ -266,18 +313,9 @@ def update_business_expense(
                 raise ValueError("Expense not found.")
             if existing["payment_source"] != "BUSINESS_ACCOUNT":
                 raise ValueError("Only business-account expenses can be edited here.")
+            description = _clean_expense_title(description, existing["description"])
 
-            cursor.execute(
-                """
-                SELECT id
-                FROM expense_categories
-                WHERE id = %s
-                  AND active = TRUE;
-                """,
-                (category_id,),
-            )
-            if cursor.fetchone() is None:
-                raise ValueError("Choose an active expense category.")
+            _load_expense_category(cursor, category_id)
 
             cursor.execute(
                 """

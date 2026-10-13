@@ -4,7 +4,6 @@ from components.cards import empty_state
 from components.layout import fixed_page_controls
 from services.dashboard_service import get_financial_summary, get_recent_activity
 from services.finance_service import (
-    get_account_balances,
     get_business_balance,
     get_business_ledger,
     get_collections,
@@ -37,7 +36,6 @@ def _load_balances():
     return {
         "business_balance": get_business_balance(),
         "ledger": get_business_ledger(limit=20),
-        "accounts": get_account_balances(),
     }
 
 
@@ -58,9 +56,10 @@ if selected_section == "General":
     finance_data = _load_finance_general(start_date, end_date)
     summary = finance_data["summary"]
     with st.container(horizontal=True):
-        st.metric("Total Collections", format_whole_kwacha(summary["revenue"]), border=True)
-        st.metric("Total Expenses", format_whole_kwacha(summary["expenses"]), border=True)
+        st.metric("Recorded revenue", format_whole_kwacha(summary["revenue"]), border=True)
+        st.metric("Recorded operating costs", format_whole_kwacha(summary["expenses"]), border=True)
         st.metric("Pending Remittances", format_whole_kwacha(summary["pending_remittances"]), border=True)
+    st.caption("Recorded operating costs exclude loan principal repayments, owner drawings and recoverable advances.")
 
     st.subheader("Recent Activity")
     activity = finance_data["activity"]
@@ -87,9 +86,9 @@ elif selected_section == "Expenses":
     if expenses:
         for item in expenses:
             with st.container(border=True):
-                st.markdown(f"**{item['category_name']}**")
+                st.markdown(f"**{item['description']}**")
                 target = item["registration_number"] or item["scope"].replace("_", " ").title()
-                st.caption(f"{format_date(item['expense_date'])} | {target}")
+                st.caption(f"{format_date(item['expense_date'])} | {item['category_name']} | {target}")
                 st.markdown(format_whole_kwacha(item["amount"]))
     else:
         empty_state("No expenses", "No recorded expenses for this period.", ":material/receipt_long:")
@@ -118,28 +117,10 @@ else:
         st.subheader("Business ledger")
         for item in ledger:
             with st.container(border=True):
-                st.markdown(f"**{item['classification']}**")
+                st.markdown(f"**{item['description'] or item['classification']}**")
                 st.caption(
-                    f"{format_date(item['transaction_date'])} | {item['account_name']} | {item['transaction_type']}"
+                    f"{format_date(item['transaction_date'])} | {item['classification']} | {item['transaction_type']}"
                 )
                 st.markdown(format_whole_kwacha(item["signed_amount"]))
-                if item["description"]:
-                    st.caption(item["description"])
     else:
         empty_state("No ledger entries", "Recorded money movements will appear here.", ":material/receipt_long:")
-
-    st.subheader("Account balances")
-    st.warning(
-        "Account balances are calculated from opening balances and recorded ledger transactions only. "
-        "They are not profit and do not include unrecorded cash.",
-        icon=":material/warning:",
-    )
-    accounts = balance_data["accounts"]
-    if accounts:
-        for account in accounts:
-            with st.container(border=True):
-                st.markdown(f"**{account['name']}**")
-                st.caption(account["account_type"])
-                st.metric("Calculated balance", format_whole_kwacha(account["calculated_balance"]))
-    else:
-        empty_state("No active accounts", "No active financial accounts are configured.", ":material/account_balance:")

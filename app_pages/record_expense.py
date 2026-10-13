@@ -4,8 +4,7 @@ from components.cards import empty_state
 from services.bus_service import get_buses_overview
 from services.expense_service import (
     delete_business_expense,
-    get_active_expense_categories,
-    get_active_payment_accounts,
+    get_operating_expense_categories,
     get_expense,
     get_recent_expenses,
     record_business_expense,
@@ -35,16 +34,8 @@ def _category_options(categories: list[dict]) -> dict[str, int]:
     return {f"{_category_group(row['name'])} - {row['name']}": row["id"] for row in categories}
 
 
-def _account_options(accounts: list[dict]) -> dict[str, int]:
-    return {
-        f"{account['name']} ({account['account_type']})": account["id"]
-        for account in accounts
-    }
-
-
 def _render_expense_form(
     categories: list[dict],
-    accounts: list[dict],
     buses: list[dict],
     today,
     expense: dict | None = None,
@@ -52,12 +43,9 @@ def _render_expense_form(
     is_edit = expense is not None
     form_key = f"expense_form_{expense['id']}" if is_edit else "record_expense_form"
     category_options = _category_options(categories)
-    account_options = _account_options(accounts)
     category_labels = list(category_options)
-    account_labels = list(account_options)
 
     selected_category_index = 0
-    selected_account_index = 0
     if is_edit:
         selected_category_index = next(
             (
@@ -67,19 +55,18 @@ def _render_expense_form(
             ),
             0,
         )
-        selected_account_index = next(
-            (
-                index
-                for index, label in enumerate(account_labels)
-                if account_options[label] == expense["financial_account_id"]
-            ),
-            0,
-        )
 
-    scope_options = ["General"]
+    scope_options = ["General Business"]
     if buses:
-        scope_options.append("Bus")
-    default_scope = "Bus" if is_edit and expense["scope"] == "BUS" and buses else "General"
+        scope_options.append("Specific Bus")
+    default_scope = "Specific Bus" if is_edit and expense["scope"] == "BUS" and buses else "General Business"
+
+    scope_label = st.segmented_control(
+        "Expense scope",
+        scope_options,
+        default=default_scope,
+        key=f"expense_scope_{form_key}",
+    )
 
     with st.form(form_key):
         expense_date = st.date_input(
@@ -94,24 +81,11 @@ def _render_expense_form(
             index=selected_category_index,
             key=f"expense_category_{form_key}",
         )
-        selected_account = st.selectbox(
-            "Paid from",
-            account_labels,
-            index=selected_account_index,
-            key=f"expense_account_{form_key}",
-        )
-
-        scope_label = st.segmented_control(
-            "Scope",
-            scope_options,
-            default=default_scope,
-            key=f"expense_scope_{form_key}",
-        )
 
         bus_id = None
-        if scope_label == "Bus":
+        if scope_label == "Specific Bus":
             bus_options = {
-                f"{bus['registration_number']} - {bus['route_name']}": bus["id"]
+                f"{bus['registration_number']} | {bus['driver_name'] or 'No driver'}": bus["id"]
                 for bus in buses
             }
             bus_labels = list(bus_options)
@@ -141,11 +115,12 @@ def _render_expense_form(
             key=f"expense_amount_{form_key}",
         )
         description = st.text_input(
-            "Description",
+            "Expense title",
             value=expense["description"] if is_edit else "",
-            placeholder="e.g. office stationery",
+            placeholder="e.g. AIH tyres",
             key=f"expense_description_{form_key}",
         )
+        st.caption("Use at most five words and 35 characters. Put longer details in Notes.")
         vendor_name = st.text_input(
             "Paid to",
             value=expense["vendor_name"] or "" if is_edit else "",
@@ -177,8 +152,7 @@ def _render_expense_form(
                 "category_id": category_options[selected_category],
                 "amount": amount,
                 "description": description,
-                "financial_account_id": account_options[selected_account],
-                "scope": "BUS" if scope_label == "Bus" else "GENERAL",
+                "scope": "BUS" if scope_label == "Specific Bus" else "GENERAL",
                 "bus_id": bus_id,
                 "vendor_name": vendor_name,
                 "reference_number": reference_number,
@@ -199,9 +173,8 @@ def _render_expense_form(
 st.subheader("Record Expense")
 
 today = today_lusaka()
-categories = get_active_expense_categories()
-accounts = get_active_payment_accounts()
-buses = get_buses_overview(today, status="ACTIVE")
+categories = get_operating_expense_categories()
+buses = get_buses_overview(today)
 
 if st.session_state.pop("expense_saved", False):
     st.success("Expense recorded.", icon=":material/check_circle:")
@@ -212,25 +185,19 @@ if not categories:
         "Add active expense categories before recording expenses.",
         ":material/category:",
     )
-elif not accounts:
-    empty_state(
-        "No payment accounts",
-        "Add an active cash, Airtel Money or bank account before recording expenses.",
-        ":material/account_balance:",
-    )
 else:
     edit_id = st.session_state.get("edit_expense_id")
     if edit_id:
         try:
             st.subheader("Edit expense")
-            _render_expense_form(categories, accounts, buses, today, expense=get_expense(edit_id))
+            _render_expense_form(categories, buses, today, expense=get_expense(edit_id))
             if st.button("Cancel edit", icon=":material/close:"):
                 st.session_state.pop("edit_expense_id", None)
                 st.rerun()
         except Exception as exc:
             st.error(f"Could not load expense: {exc}", icon=":material/error:")
     else:
-        _render_expense_form(categories, accounts, buses, today)
+        _render_expense_form(categories, buses, today)
 
 recent = get_recent_expenses(limit=10)
 if recent:
@@ -244,11 +211,11 @@ if recent:
                 st.caption(f"Reference: {expense['reference_number']}")
             if expense["registration_number"]:
                 st.caption(
-                    f"{format_date(expense['expense_date'])} | {expense['category_name']} | "
+                    f"{format_date(expense['expense_date'])} | Specific Bus | {expense['category_name']} | "
                     f"{expense['registration_number']}"
                 )
             else:
-                st.caption(f"{format_date(expense['expense_date'])} | {expense['category_name']}")
+                st.caption(f"{format_date(expense['expense_date'])} | General Business | {expense['category_name']}")
             st.markdown(format_whole_kwacha(expense["amount"]))
             with st.container(horizontal=True):
                 if st.button("Edit", icon=":material/edit:", key=f"edit_expense_{expense['id']}"):

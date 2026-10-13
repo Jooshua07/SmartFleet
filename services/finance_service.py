@@ -92,7 +92,7 @@ def get_business_balance() -> dict:
                     COALESCE(SUM(CASE WHEN direction = 'OUT' THEN amount ELSE 0 END), 0) AS money_out,
                     COALESCE(SUM(CASE WHEN transaction_type = 'CASHING' AND direction = 'IN' THEN amount ELSE 0 END), 0)
                         AS collections,
-                    COALESCE(SUM(CASE WHEN transaction_type IN ('EXPENSE','DRIVER_SALARY','DRIVER_ADVANCE','OTHER')
+                    COALESCE(SUM(CASE WHEN transaction_type IN ('EXPENSE','DRIVER_SALARY','TRANSFER_FEE','OTHER')
                                       AND direction = 'OUT' THEN amount ELSE 0 END), 0)
                         AS operating_payments,
                     COALESCE(SUM(CASE WHEN transaction_type IN ('OWNER_LOAN','LOAN_RECEIVED')
@@ -140,10 +140,14 @@ def get_business_ledger(limit: int = 30) -> list[dict]:
                     END AS signed_amount,
                     CASE
                         WHEN ft.transaction_type = 'CASHING' THEN 'Collection'
-                        WHEN ft.transaction_type IN ('EXPENSE','DRIVER_SALARY','DRIVER_ADVANCE','OTHER') THEN 'Operating payment'
+                        WHEN ft.transaction_type = 'EXPENSE' THEN 'Operating expense'
+                        WHEN ft.transaction_type = 'DRIVER_SALARY' THEN 'Payroll'
+                        WHEN ft.transaction_type = 'DRIVER_ADVANCE' THEN 'Recoverable advance'
+                        WHEN ft.transaction_type = 'OWNER_DRAWING' THEN 'Owner drawing'
                         WHEN ft.transaction_type IN ('OWNER_LOAN','LOAN_RECEIVED') THEN 'Financing received'
-                        WHEN ft.transaction_type IN ('LOAN_REPAYMENT','OWNER_LOAN_REPAYMENT','OWNER_DRAWING') THEN 'Financing payment'
-                        WHEN ft.transaction_type IN ('TRANSFER','TRANSFER_FEE') THEN 'Transfer'
+                        WHEN ft.transaction_type IN ('LOAN_REPAYMENT','OWNER_LOAN_REPAYMENT') THEN 'Financing payment'
+                        WHEN ft.transaction_type = 'TRANSFER_FEE' THEN 'Transfer fee'
+                        WHEN ft.transaction_type = 'TRANSFER' THEN 'Transfer'
                         ELSE 'Other'
                     END AS classification,
                     ft.description,

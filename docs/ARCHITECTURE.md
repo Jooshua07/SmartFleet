@@ -4,7 +4,7 @@ Last updated: 2026-10-13
 
 ## Current architecture
 
-SmartFleet currently has a strong PostgreSQL schema and a Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, account management, backups, exports, Business Presets and a consolidated Business Balance view. Several advanced business write workflows remain planned.
+SmartFleet currently has a strong PostgreSQL schema and a Streamlit shell. The shell provides native page routing, shared UI helpers, real-data empty states, fleet setup writes, fleet edit/deactivation/reactivation, smart cashing, expense entry/edit/delete, Bus Accounts, backups, exports, Business Presets and a consolidated Business Balance view. Several advanced business write workflows remain planned.
 
 ```text
 User browser
@@ -28,6 +28,7 @@ services/bus_service.py         bus list/create helpers plus document metadata
 services/driver_service.py      driver list/create helpers and employment lookup
 services/cashing_service.py     direct cashing collection summaries and writes
 services/smart_cashing_service.py expected cashing, allocations and obligations
+services/bus_account_service.py recorded bus contribution and shared-cost reporting
 services/preset_service.py      business settings, rates, salary and reminder presets
 services/loan_service.py        loan repayment classification helpers
 tests/                          unittest and Streamlit AppTest coverage
@@ -112,8 +113,9 @@ Current and planned service modules:
 | `services/cashing_service.py` | Direct cashing, Airtel Money collection destination, collections, remittances and ledger links |
 | `services/smart_cashing_service.py` | Sunday/Thursday cashing coverage, expected cashing, standard/manual allocations, obligations and obligation repayments |
 | `services/expense_service.py` | Expense entry, allocation and ledger links |
+| `services/bus_account_service.py` | Recorded revenue, attributed bus costs, shared general costs and Bus Accounts drill-downs |
 | `services/dashboard_service.py` | Dashboard summaries, status counts, performance and activity |
-| `services/finance_service.py` | Collection, expense, consolidated Business Balance, business ledger and calculated account balance reads |
+| `services/finance_service.py` | Collection, expense, consolidated Business Balance and business ledger reads |
 | `services/reminder_service.py` | Due maintenance, document expiries, deactivated buses and stored reminders |
 | `services/preset_service.py` | Reporting baseline, cashing-rate history, cashing schedule, salary and reminder presets |
 | `services/loan_service.py` | Business loan repayment classification helpers |
@@ -211,22 +213,42 @@ Account balances remain account-specific and still include each account opening 
 The UI title must be `Record Expense`. The first implemented flow supports business-account expenses.
 
 ```text
-1. User selects expense date, category, payment account, scope, amount and description.
-2. UI asks the service for active categories, active payment accounts and active buses.
+1. User selects expense date, operating category, scope, amount and expense title.
+2. UI asks the service for active operating categories and all registered buses, including deactivated buses for historical edits.
 3. Service validates:
    - amount is greater than zero
-   - description is present
-   - category and payment account are active
+   - expense title is present, at most five words and at most 35 characters
+   - category is active and is not a restricted financial category
    - bus scope has a valid bus
+   - general scope is not linked to one bus
 4. Service starts one transaction.
-5. Service inserts an outbound `financial_transactions` row of type EXPENSE.
-6. Service inserts the linked `expenses` row.
-7. PostgreSQL checks expense/ledger consistency.
-8. Transaction commits.
-9. UI shows a success message and recent expenses reflects the new record.
+5. Service resolves the configured default business payment account, currently the active Airtel Money account from Business Presets.
+6. Service inserts an outbound `financial_transactions` row of type EXPENSE.
+7. Service inserts the linked `expenses` row.
+8. PostgreSQL checks expense/ledger consistency.
+9. Transaction commits.
+10. UI shows a success message and recent expenses reflects the new record.
 ```
 
-Owner-personal expenses and multi-bus allocation remain planned.
+Ordinary expense recording blocks loan repayments, recoverable driver advances, driver salaries and owner drawings so they cannot be silently saved as generic operating expenses. Loan repayment has a minimal financing workflow in `services.loan_service`. Driver advance, salary and owner drawing UI workflows remain planned.
+
+## Typical data flow: Bus Accounts
+
+Bus Accounts is not a Cash/Airtel/Bank account manager. It is a recorded bus-performance view.
+
+```text
+1. User chooses 1 Month, 3 Months or a custom date range.
+2. `services.bus_account_service.get_bus_contribution_summary` reads registered buses, per-bus remittances, direct bus expenses and supported expense allocations.
+3. Shared/general business expenses are summed separately and are not divided across buses.
+4. Recorded Bus Contribution is calculated as:
+   bus-attributed recorded cashing
+   minus direct bus-specific operating costs
+   minus verified bus-allocated operating costs.
+5. Finance/owner drawings/loan principal and recoverable advances are excluded from bus contribution.
+6. Individual bus detail uses `get_bus_account_detail` for trend, category and recent bus-related transactions.
+```
+
+If a cashing amount is estimated or manually adjusted rather than confirmed actual, Bus Accounts keeps it visible as recorded revenue but labels the page with the appropriate caveat. Unallocated collection differences are not invented as bus revenue.
 
 ## Navigation and shared UI
 
@@ -236,6 +258,7 @@ Phone-first navigation target:
 - More quick actions: Record Cashing, Record Expense, Add Bus, Drivers, Reminders.
 - Buses page internal tabs: Buses, Routes, Drivers.
 - Finance page internal tabs: General, Collections, Expenses, Balances.
+- More > Management now links to Bus Accounts instead of individual payment-account management.
 
 The current app uses hidden `st.navigation` plus a bottom action row rendered with `st.bottom`. This avoids legacy `pages/` auto-discovery and avoids fragile CSS selectors tied to Streamlit internals. Browser/mobile verification is still required before this is considered final.
 

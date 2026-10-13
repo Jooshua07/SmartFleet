@@ -16,8 +16,8 @@ class DashboardChartTests(unittest.TestCase):
             ]
         )
 
-        self.assertEqual(data.loc[data["Type"] == "Revenue", "Amount"].iloc[0], 6000.0)
-        self.assertEqual(data.loc[data["Type"] == "Expenses", "Amount"].iloc[0], 4000.0)
+        self.assertEqual(data.loc[data["Type"] == "Recorded Revenue", "Amount"].iloc[0], 6000.0)
+        self.assertEqual(data.loc[data["Type"] == "Attributed Operating Costs", "Amount"].iloc[0], 4000.0)
 
     def test_bus_performance_chart_y_axis_starts_at_zero(self):
         data = build_bus_performance_chart_data(

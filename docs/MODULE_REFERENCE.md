@@ -217,13 +217,13 @@ This reference covers significant code functions that exist today, plus the inst
 ### `services.dashboard_service.get_financial_summary`
 
 - File: `services/dashboard_service.py`
-- Purpose: Return period revenue, expenses and pending remittance amounts.
+- Purpose: Return period recorded revenue, recorded operating costs and pending remittance amounts.
 - Parameters: `start_date`, `end_date`.
 - Returns: dictionary with `revenue`, `expenses`, `pending_remittances`.
 - Database tables accessed:
   - `remittances`
   - `remittance_collections`
-  - `expenses`
+  - `financial_transactions`
 - Important validation: none.
 - Used by:
   - Home page.
@@ -241,17 +241,47 @@ This reference covers significant code functions that exist today, plus the inst
 ### `services.dashboard_service.get_bus_performance`
 
 - File: `services/dashboard_service.py`
-- Purpose: Return bus-level revenue and bus-allocated expenses for a period.
+- Purpose: Return bus-level recorded revenue and attributed operating costs for a period by delegating to Bus Accounts calculations.
 - Parameters: `start_date`, `end_date`.
 - Returns: list of dictionary rows.
+- Database tables accessed through `services.bus_account_service.get_bus_contribution_summary`.
+- Important validation: company-wide `GENERAL` expenses are not allocated to buses.
+- Used by: Home page.
+
+### `services.bus_account_service.get_bus_contribution_summary`
+
+- File: `services/bus_account_service.py`
+- Purpose: Return Bus Accounts comparison data for a period.
+- Parameters: `start_date`, `end_date`.
+- Returns: dictionary with `buses` and `shared_general_costs`.
 - Database tables accessed:
   - `buses`
   - `remittances`
   - `remittance_collections`
   - `expenses`
   - `expense_allocations`
-- Important validation: company-wide `GENERAL` expenses are not allocated to buses.
-- Used by: Home page.
+- Important behavior:
+  - bus revenue comes only from remittance rows attributed to that bus.
+  - direct bus expenses use `expenses.scope = 'BUS'`.
+  - verified allocations use `expense_allocations` for `MULTI_BUS` expenses.
+  - shared `GENERAL` expenses are summed separately and are not divided across buses.
+  - recorded bus contribution equals recorded bus revenue minus attributed bus operating costs.
+- Used by: Bus Accounts page and Home bus-performance wrapper.
+
+### `services.bus_account_service.get_bus_account_detail`
+
+- File: `services/bus_account_service.py`
+- Purpose: Return detail data for one bus in Bus Accounts.
+- Parameters: `bus_id`, `start_date`, `end_date`.
+- Returns: dictionary with `bus`, `trend`, `costs_by_category` and `recent_transactions`.
+- Database tables accessed:
+  - `buses`
+  - `remittances`
+  - `remittance_collections`
+  - `expenses`
+  - `expense_categories`
+  - `expense_allocations`
+- Used by: Bus Accounts page.
 
 ### `services.dashboard_service.get_recent_activity`
 
@@ -641,7 +671,7 @@ This reference covers significant code functions that exist today, plus the inst
 - Database tables accessed:
   - `financial_accounts`
   - `financial_transactions`
-- Used by: Finance page Balances tab.
+- Used by: backend/reporting compatibility only; the visible Finance Balances page now shows consolidated Business Balance instead of individual account balance cards.
 
 ### `services.finance_service.get_business_balance`
 
@@ -657,6 +687,7 @@ This reference covers significant code functions that exist today, plus the inst
   - outbound transactions reduce the balance.
   - the balance can be negative.
   - loan repayments are classified as financing payments.
+  - recoverable driver advances are not counted as operating payments.
 - Used by: Finance page Balances tab.
 
 ### `services.finance_service.get_business_ledger`
@@ -726,9 +757,18 @@ This reference covers significant code functions that exist today, plus the inst
 ### `services.expense_service.get_active_expense_categories`
 
 - File: `services/expense_service.py`
-- Purpose: Return active expense categories for the Record Expense form.
+- Purpose: Return all active expense categories.
 - Parameters: none.
 - Returns: list of category rows.
+- Database tables accessed: `expense_categories`.
+- Used by: service helpers and compatibility callers.
+
+### `services.expense_service.get_operating_expense_categories`
+
+- File: `services/expense_service.py`
+- Purpose: Return active categories that are safe for ordinary expense recording.
+- Parameters: none.
+- Returns: list of category rows excluding driver advances, driver salaries, loan repayments and owner drawings.
 - Database tables accessed: `expense_categories`.
 - Used by: Record Expense page.
 
@@ -739,7 +779,7 @@ This reference covers significant code functions that exist today, plus the inst
 - Parameters: none.
 - Returns: list of account rows.
 - Database tables accessed: `financial_accounts`.
-- Used by: Record Expense page.
+- Used by: compatibility/future workflows; ordinary Record Expense no longer exposes a Paid From selector.
 
 ### `services.expense_service.get_recent_expenses`
 
@@ -762,8 +802,8 @@ This reference covers significant code functions that exist today, plus the inst
   - `expense_date`
   - `category_id`
   - `amount`
-  - `description`
-  - `financial_account_id`
+  - `description` (used as Expense Title)
+  - optional `financial_account_id`; omitted values use the configured default business payment account.
   - `scope`
   - `bus_id`
   - `notes`
@@ -776,11 +816,40 @@ This reference covers significant code functions that exist today, plus the inst
   - `expenses`
 - Important validation:
   - amount must be greater than zero.
-  - description is required.
-  - category and payment account must be active.
+  - Expense Title is required, at most five words and at most 35 characters.
+  - category must be active and must not be a restricted financial category.
+  - payment account must be active, selected internally from business settings when omitted.
   - bus scope requires a valid bus.
+  - general scope cannot be linked to one bus.
   - only `GENERAL` and single `BUS` scope are supported today.
 - Used by: Record Expense page.
+
+### `services.expense_service.update_business_expense`
+
+- File: `services/expense_service.py`
+- Purpose: Update a business-account expense and its existing linked ledger entry without creating a duplicate payment.
+- Parameters: same core fields as `record_business_expense`, plus `expense_id`.
+- Database tables accessed:
+  - `expenses`
+  - `expense_categories`
+  - `financial_accounts`
+  - `buses`
+  - `financial_transactions`
+- Important validation:
+  - only business-account expenses can be edited here.
+  - existing overlong titles can be preserved unchanged, but new/changed titles must meet the current title limit.
+  - switching between General Business and Specific Bus updates the expense classification while preserving one linked ledger transaction.
+
+### `services.account_service.get_default_business_payment_account`
+
+- File: `services/account_service.py`
+- Purpose: Resolve the active internal business payment account from Business Presets.
+- Parameters: none.
+- Returns: account row with `id`, `name`, `account_type`.
+- Database tables accessed:
+  - `business_settings`
+  - `financial_accounts`
+- Used by: ordinary Expense service.
 
 ### `services.reminder_service.get_due_maintenance`
 
@@ -932,6 +1001,7 @@ This reference covers significant code functions that exist today, plus the inst
 - Important validation:
   - Business Balance can go negative.
   - loan repayments are classified as financing payments.
+  - recoverable driver advances are classified separately from operating expenses.
   - effective-dated cashing rate updates preserve the previous rate window.
   - overlapping cashing-rate effective dates are rejected.
   - unidentified loan repayments require notes.
@@ -957,6 +1027,20 @@ This reference covers significant code functions that exist today, plus the inst
   - records one K1,800 smart cashing collection.
   - corrects the same collection to K1,700.
   - verifies one matching inbound `CASHING` ledger receipt.
+  - drops the temporary database.
+
+### `scripts.smoke_expense_finance`
+
+- File: `scripts/smoke_expense_finance.py`
+- Purpose: Run a disposable end-to-end expense, Bus Accounts and Finance classification smoke check.
+- Important validation:
+  - creates a temporary PostgreSQL database.
+  - applies all numbered migrations.
+  - inserts two test buses.
+  - records K4,000 AIH bushes and K4,000 AIH tyres as bus-specific costs.
+  - records K3,000 brake pads, K2,000 air filters and K2,535 oil filters as shared/general maintenance costs.
+  - records a K15,000 loan repayment through the loan workflow.
+  - verifies AIH attributed costs, AIF unaffected costs, shared general costs, Business Balance, operating payments and financing-out totals.
   - drops the temporary database.
 
 ### `tests.test_record_cashing_page`
@@ -988,9 +1072,40 @@ This reference covers significant code functions that exist today, plus the inst
 - Purpose: Validate expense service input checks that run before database writes.
 - Important validation:
   - positive amount required.
-  - description required.
+  - Expense Title required.
+  - title limits are enforced without destructively truncating existing long titles.
   - bus expenses require a bus.
   - general expenses cannot be linked to one bus.
+  - default business payment account is used when no account is supplied.
+  - restricted financial categories cannot be saved as ordinary expenses.
+  - scope changes keep one existing financial payment.
+
+### `tests.test_record_expense_page`
+
+- File: `tests/test_record_expense_page.py`
+- Purpose: Use Streamlit AppTest to exercise the Record Expense page with mocked category, bus and expense data.
+- Important validation:
+  - Paid From is not exposed in the everyday expense UI.
+  - General Business and Specific Bus scope selector is visible.
+  - Specific Bus reveals active and deactivated buses for historical edits.
+  - recent expense cards use the Expense Title as the prominent text.
+
+### `tests.test_bus_account_service`
+
+- File: `tests/test_bus_account_service.py`
+- Purpose: Validate Bus Accounts calculations without live database writes.
+- Important validation:
+  - shared/general costs stay separate.
+  - bus-attributed costs remain assigned only to the relevant bus.
+
+### `tests.test_bus_accounts_page`
+
+- File: `tests/test_bus_accounts_page.py`
+- Purpose: Use Streamlit AppTest to exercise the Bus Accounts page with mocked performance data.
+- Important validation:
+  - Bus Accounts loads comparison metrics.
+  - shared costs and recorded contribution are visible.
+  - individual bus detail and recent bus-related transactions render.
 
 ### `tests/inspect_buses.py`
 
