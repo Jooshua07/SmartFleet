@@ -1,7 +1,10 @@
 import streamlit as st
 
 from services.loan_service import (
+    cancel_owner_drawing,
+    cancel_owner_loan_transaction,
     get_owner_money_summary,
+    list_owner_money_activity,
     list_business_loans,
     record_business_repayment_to_owner,
     record_loan_repayment,
@@ -113,12 +116,35 @@ else:
         except Exception as exc:
             st.error(f"Could not repay owner: {exc}", icon=":material/error:")
 
-if summary["transactions"]:
+activity = list_owner_money_activity()
+if activity:
     st.subheader("Owner money history")
-    for item in summary["transactions"]:
-        st.caption(
-            f"{format_date(item['transaction_date'])} | {item['transaction_type']} | "
-            f"{format_whole_kwacha(item['amount'])} | {item['description']}"
-        )
+    for item in activity:
+        with st.container(border=True):
+            st.caption(
+                f"{format_date(item['transaction_date'])} | {item['label']} | "
+                f"{format_whole_kwacha(item['amount'])} | {item['description']}"
+            )
+            with st.expander("Correction"):
+                if item["linked_to_loan_repayment"]:
+                    st.caption("Reverse this from Loans because it is linked to a business-loan repayment.")
+                else:
+                    with st.form(f"cancel_owner_money_{item['record_type']}_{item['record_id']}", clear_on_submit=True):
+                        reason = st.text_input(
+                            "Correction reason",
+                            key=f"owner_money_reason_{item['record_type']}_{item['record_id']}",
+                        )
+                        submitted = st.form_submit_button("Cancel record", icon=":material/undo:")
+                    if submitted:
+                        try:
+                            if item["record_type"] == "OWNER_DRAWING":
+                                cancel_owner_drawing(item["record_id"], reason)
+                            else:
+                                cancel_owner_loan_transaction(item["record_id"], reason)
+                            st.cache_data.clear()
+                            st.success("Owner money record cancelled.", icon=":material/check_circle:")
+                            st.rerun()
+                        except Exception as exc:
+                            st.error(f"Could not cancel record: {exc}", icon=":material/error:")
 else:
     st.caption("No owner money transactions yet.")

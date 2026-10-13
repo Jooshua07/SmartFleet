@@ -7,6 +7,7 @@ from psycopg.rows import dict_row
 
 from database.connection import get_connection
 from services.account_service import get_default_business_payment_account
+from services.correction_service import record_correction_audit
 from utils.validation import (
     clean_optional_text,
     clean_required_text,
@@ -84,9 +85,12 @@ def list_loan_repayments(limit: int = 30) -> list[dict]:
                 """
                 SELECT
                     lr.id,
+                    lr.loan_id,
                     lr.repayment_date,
                     lr.amount,
                     lr.payment_source,
+                    lr.financial_transaction_id,
+                    lr.owner_loan_transaction_id,
                     lr.notes,
                     bl.loan_name,
                     bl.lender
@@ -96,6 +100,67 @@ def list_loan_repayments(limit: int = 30) -> list[dict]:
                 LIMIT %s;
                 """,
                 (limit,),
+            )
+            return cursor.fetchall()
+
+
+def list_owner_money_activity(limit: int = 30) -> list[dict]:
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            owner_id = _owner_loan_id(cursor)
+            cursor.execute(
+                """
+                (
+                    SELECT
+                        'OWNER_TRANSACTION' AS record_type,
+                        olt.id AS record_id,
+                        olt.transaction_date,
+                        olt.transaction_type,
+                        CASE
+                            WHEN olt.transaction_type = 'OWNER_FUNDED'
+                                 AND olt.financial_transaction_id IS NOT NULL
+                                THEN 'Owner loan to business'
+                            WHEN olt.transaction_type = 'OWNER_FUNDED'
+                                THEN 'Owner funded payment'
+                            WHEN olt.transaction_type = 'REPAYMENT'
+                                THEN 'Business repaid owner'
+                            ELSE olt.transaction_type
+                        END AS label,
+                        olt.amount,
+                        olt.description,
+                        olt.notes,
+                        olt.expense_id,
+                        olt.financial_transaction_id,
+                        EXISTS (
+                            SELECT 1
+                            FROM loan_repayments lr
+                            WHERE lr.owner_loan_transaction_id = olt.id
+                        ) AS linked_to_loan_repayment
+                    FROM owner_loan_transactions olt
+                    WHERE olt.owner_loan_id = %s
+                )
+                UNION ALL
+                (
+                    SELECT
+                        'OWNER_DRAWING' AS record_type,
+                        e.id AS record_id,
+                        e.expense_date AS transaction_date,
+                        'OWNER_DRAWING' AS transaction_type,
+                        'Owner drawing' AS label,
+                        e.amount,
+                        e.description,
+                        e.notes,
+                        e.id AS expense_id,
+                        e.financial_transaction_id,
+                        FALSE AS linked_to_loan_repayment
+                    FROM expenses e
+                    JOIN expense_categories ec ON ec.id = e.category_id
+                    WHERE ec.name = 'Owner Drawings'
+                )
+                ORDER BY transaction_date DESC, record_id DESC
+                LIMIT %s;
+                """,
+                (owner_id, limit),
             )
             return cursor.fetchall()
 
@@ -240,6 +305,86 @@ def _mark_loan_if_complete(cursor, loan_id: int | None) -> None:
         """,
         (loan_id,),
     )
+
+
+def _owner_outstanding(cursor, owner_loan_id: int) -> Decimal:
+    cursor.execute(
+        """
+        SELECT COALESCE(SUM(CASE WHEN transaction_type = 'OWNER_FUNDED' THEN amount ELSE -amount END), 0)
+            AS outstanding
+        FROM owner_loan_transactions
+        WHERE owner_loan_id = %s;
+        """,
+        (owner_loan_id,),
+    )
+    return cursor.fetchone()["outstanding"]
+
+
+def cancel_loan_repayment(repayment_id: int, reason: str) -> dict:
+    reason = clean_required_text(reason, "Correction reason")
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM loan_repayments
+                WHERE id = %s
+                FOR UPDATE;
+                """,
+                (repayment_id,),
+            )
+            repayment = cursor.fetchone()
+            if repayment is None:
+                raise ValueError("Loan repayment not found.")
+
+            financial_transaction = None
+            owner_transaction = None
+            if repayment["financial_transaction_id"] is not None:
+                cursor.execute(
+                    "SELECT * FROM financial_transactions WHERE id = %s;",
+                    (repayment["financial_transaction_id"],),
+                )
+                financial_transaction = cursor.fetchone()
+            if repayment["owner_loan_transaction_id"] is not None:
+                cursor.execute(
+                    "SELECT * FROM owner_loan_transactions WHERE id = %s FOR UPDATE;",
+                    (repayment["owner_loan_transaction_id"],),
+                )
+                owner_transaction = cursor.fetchone()
+                if owner_transaction is None:
+                    raise ValueError("Linked owner transaction was not found.")
+                outstanding = _owner_outstanding(cursor, owner_transaction["owner_loan_id"])
+                if outstanding - owner_transaction["amount"] < 0:
+                    raise ValueError(
+                        "This owner-funded repayment cannot be reversed because later repayments depend on it."
+                    )
+
+            audit = record_correction_audit(
+                cursor,
+                area="Loans",
+                record_type="loan_repayment",
+                record_id=repayment_id,
+                action="CANCEL",
+                reason=reason,
+                snapshot={
+                    "loan_repayment": dict(repayment),
+                    "financial_transaction": dict(financial_transaction) if financial_transaction else None,
+                    "owner_loan_transaction": dict(owner_transaction) if owner_transaction else None,
+                },
+            )
+            cursor.execute("DELETE FROM loan_repayments WHERE id = %s;", (repayment_id,))
+            if repayment["financial_transaction_id"] is not None:
+                cursor.execute(
+                    "DELETE FROM financial_transactions WHERE id = %s;",
+                    (repayment["financial_transaction_id"],),
+                )
+            if repayment["owner_loan_transaction_id"] is not None:
+                cursor.execute(
+                    "DELETE FROM owner_loan_transactions WHERE id = %s;",
+                    (repayment["owner_loan_transaction_id"],),
+                )
+            _mark_loan_if_complete(cursor, repayment["loan_id"])
+            return audit
 
 
 def record_loan_repayment(
@@ -661,6 +806,118 @@ def record_business_repayment_to_owner(
                 ),
             )
             return cursor.fetchone()
+
+
+def cancel_owner_loan_transaction(owner_transaction_id: int, reason: str) -> dict:
+    reason = clean_required_text(reason, "Correction reason")
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT *
+                FROM owner_loan_transactions
+                WHERE id = %s
+                FOR UPDATE;
+                """,
+                (owner_transaction_id,),
+            )
+            owner_transaction = cursor.fetchone()
+            if owner_transaction is None:
+                raise ValueError("Owner money transaction not found.")
+            cursor.execute(
+                """
+                SELECT id
+                FROM loan_repayments
+                WHERE owner_loan_transaction_id = %s;
+                """,
+                (owner_transaction_id,),
+            )
+            if cursor.fetchone() is not None:
+                raise ValueError("Reverse the linked loan repayment from the Loans page.")
+            if owner_transaction["expense_id"] is not None:
+                raise ValueError("This owner-funded expense needs a dedicated expense correction.")
+            if owner_transaction["transaction_type"] == "OWNER_FUNDED":
+                outstanding = _owner_outstanding(cursor, owner_transaction["owner_loan_id"])
+                if outstanding - owner_transaction["amount"] < 0:
+                    raise ValueError("This owner funding cannot be reversed because repayments depend on it.")
+
+            financial_transaction = None
+            if owner_transaction["financial_transaction_id"] is not None:
+                cursor.execute(
+                    "SELECT * FROM financial_transactions WHERE id = %s;",
+                    (owner_transaction["financial_transaction_id"],),
+                )
+                financial_transaction = cursor.fetchone()
+
+            audit = record_correction_audit(
+                cursor,
+                area="Owner Money",
+                record_type="owner_loan_transaction",
+                record_id=owner_transaction_id,
+                action="CANCEL",
+                reason=reason,
+                snapshot={
+                    "owner_loan_transaction": dict(owner_transaction),
+                    "financial_transaction": dict(financial_transaction) if financial_transaction else None,
+                },
+            )
+            cursor.execute("DELETE FROM owner_loan_transactions WHERE id = %s;", (owner_transaction_id,))
+            if owner_transaction["financial_transaction_id"] is not None:
+                cursor.execute(
+                    "DELETE FROM financial_transactions WHERE id = %s;",
+                    (owner_transaction["financial_transaction_id"],),
+                )
+            return audit
+
+
+def cancel_owner_drawing(expense_id: int, reason: str) -> dict:
+    reason = clean_required_text(reason, "Correction reason")
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT
+                    e.*,
+                    ec.name AS category_name
+                FROM expenses e
+                JOIN expense_categories ec ON ec.id = e.category_id
+                WHERE e.id = %s
+                  AND ec.name = 'Owner Drawings'
+                FOR UPDATE;
+                """,
+                (expense_id,),
+            )
+            drawing = cursor.fetchone()
+            if drawing is None:
+                raise ValueError("Owner drawing not found.")
+            financial_transaction = None
+            if drawing["financial_transaction_id"] is not None:
+                cursor.execute(
+                    "SELECT * FROM financial_transactions WHERE id = %s;",
+                    (drawing["financial_transaction_id"],),
+                )
+                financial_transaction = cursor.fetchone()
+
+            audit = record_correction_audit(
+                cursor,
+                area="Owner Money",
+                record_type="owner_drawing",
+                record_id=expense_id,
+                action="CANCEL",
+                reason=reason,
+                snapshot={
+                    "expense": dict(drawing),
+                    "financial_transaction": dict(financial_transaction) if financial_transaction else None,
+                },
+            )
+            cursor.execute("DELETE FROM expense_allocations WHERE expense_id = %s;", (expense_id,))
+            cursor.execute("DELETE FROM expenses WHERE id = %s;", (expense_id,))
+            if drawing["financial_transaction_id"] is not None:
+                cursor.execute(
+                    "DELETE FROM financial_transactions WHERE id = %s;",
+                    (drawing["financial_transaction_id"],),
+                )
+            return audit
 
 
 def reclassify_expense_as_loan_repayment(

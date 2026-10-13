@@ -4,6 +4,7 @@ import streamlit as st
 
 from components.cards import empty_state
 from services.driver_money_service import (
+    cancel_driver_advance,
     cancel_driver_salary,
     get_driver_money_detail,
     get_salary_preview,
@@ -131,6 +132,18 @@ if open_advances:
             )
             if advance["reason"]:
                 st.write(advance["reason"])
+            with st.expander("Correction"):
+                with st.form(f"cancel_advance_{advance['id']}", clear_on_submit=True):
+                    reason = st.text_input("Correction reason", key=f"cancel_advance_reason_{advance['id']}")
+                    submitted = st.form_submit_button("Cancel advance", icon=":material/undo:")
+                if submitted:
+                    try:
+                        cancel_driver_advance(advance["id"], reason)
+                        st.cache_data.clear()
+                        st.success("Advance cancelled.", icon=":material/check_circle:")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Could not cancel advance: {exc}", icon=":material/error:")
 else:
     st.caption("No outstanding advances for this driver.")
 
@@ -147,14 +160,18 @@ if detail["salaries"]:
                 f"Advance recovery {format_whole_kwacha(salary['advance_recovery'])} | "
                 f"Net {format_whole_kwacha(salary['net_salary'])}"
             )
-            if st.button("Cancel salary", icon=":material/cancel:", key=f"cancel_salary_{salary['id']}"):
-                try:
-                    cancel_driver_salary(salary["id"])
-                    st.cache_data.clear()
-                    st.success("Salary cancelled.", icon=":material/check_circle:")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Could not cancel salary: {exc}", icon=":material/error:")
+            with st.expander("Correction"):
+                with st.form(f"cancel_salary_{salary['id']}", clear_on_submit=True):
+                    reason = st.text_input("Correction reason", key=f"cancel_salary_reason_{salary['id']}")
+                    submitted = st.form_submit_button("Cancel salary", icon=":material/cancel:")
+                if submitted:
+                    try:
+                        cancel_driver_salary(salary["id"], reason)
+                        st.cache_data.clear()
+                        st.success("Salary cancelled.", icon=":material/check_circle:")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Could not cancel salary: {exc}", icon=":material/error:")
 else:
     st.caption("No salary records yet.")
 

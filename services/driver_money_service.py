@@ -8,8 +8,9 @@ from psycopg.rows import dict_row
 
 from database.connection import get_connection
 from services.account_service import get_default_business_payment_account
+from services.correction_service import record_correction_audit
 from services.preset_service import get_driver_advance_limit
-from utils.validation import clean_optional_text, parse_non_negative_amount, parse_positive_amount
+from utils.validation import clean_optional_text, clean_required_text, parse_non_negative_amount, parse_positive_amount
 
 
 KWACHA = Decimal("0.01")
@@ -506,12 +507,77 @@ def record_driver_salary(
             return salary
 
 
-def cancel_driver_salary(salary_id: int) -> None:
+def cancel_driver_advance(advance_id: int, reason: str) -> dict:
+    reason = clean_required_text(reason, "Correction reason")
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 """
-                SELECT id, employment_id, financial_transaction_id
+                SELECT
+                    a.id,
+                    a.employment_id,
+                    a.advance_date,
+                    a.amount,
+                    a.planned_repayment_amount,
+                    a.status,
+                    a.reason,
+                    a.notes,
+                    a.financial_transaction_id,
+                    ft.account_id,
+                    ft.transaction_date,
+                    ft.transaction_type,
+                    ft.direction,
+                    ft.amount AS ledger_amount,
+                    ft.description AS ledger_description,
+                    ft.notes AS ledger_notes
+                FROM driver_advances a
+                JOIN financial_transactions ft ON ft.id = a.financial_transaction_id
+                WHERE a.id = %s
+                FOR UPDATE;
+                """,
+                (advance_id,),
+            )
+            advance = cursor.fetchone()
+            if advance is None:
+                raise ValueError("Advance record not found.")
+            cursor.execute(
+                """
+                SELECT COUNT(*) AS recovery_count,
+                       COALESCE(SUM(ar.amount), 0) AS recovered_amount
+                FROM salary_advance_recoveries ar
+                WHERE ar.advance_id = %s;
+                """,
+                (advance_id,),
+            )
+            recovery = cursor.fetchone()
+            if recovery["recovery_count"] > 0:
+                raise ValueError("This advance is already linked to salary recovery. Cancel the salary first.")
+
+            audit = record_correction_audit(
+                cursor,
+                area="Driver Money",
+                record_type="driver_advance",
+                record_id=advance_id,
+                action="CANCEL",
+                reason=reason,
+                snapshot={
+                    "advance": dict(advance),
+                    "recovery_count": recovery["recovery_count"],
+                    "recovered_amount": recovery["recovered_amount"],
+                },
+            )
+            cursor.execute("DELETE FROM driver_advances WHERE id = %s;", (advance_id,))
+            cursor.execute("DELETE FROM financial_transactions WHERE id = %s;", (advance["financial_transaction_id"],))
+            return audit
+
+
+def cancel_driver_salary(salary_id: int, reason: str) -> dict:
+    reason = clean_required_text(reason, "Correction reason")
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute(
+                """
+                SELECT *
                 FROM driver_salaries
                 WHERE id = %s
                 FOR UPDATE;
@@ -521,11 +587,38 @@ def cancel_driver_salary(salary_id: int) -> None:
             salary = cursor.fetchone()
             if salary is None:
                 raise ValueError("Salary record not found.")
+            financial_transaction = None
+            if salary["financial_transaction_id"] is not None:
+                cursor.execute(
+                    "SELECT * FROM financial_transactions WHERE id = %s;",
+                    (salary["financial_transaction_id"],),
+                )
+                financial_transaction = cursor.fetchone()
             cursor.execute(
-                "SELECT advance_id FROM salary_advance_recoveries WHERE salary_id = %s;",
+                "SELECT * FROM salary_advance_recoveries WHERE salary_id = %s;",
                 (salary_id,),
             )
-            affected_advances = [row["advance_id"] for row in cursor.fetchall()]
+            recoveries = cursor.fetchall()
+            affected_advances = [row["advance_id"] for row in recoveries]
+            cursor.execute(
+                "SELECT * FROM salary_deduction_allocations WHERE salary_id = %s;",
+                (salary_id,),
+            )
+            deductions = cursor.fetchall()
+            audit = record_correction_audit(
+                cursor,
+                area="Driver Money",
+                record_type="driver_salary",
+                record_id=salary_id,
+                action="CANCEL",
+                reason=reason,
+                snapshot={
+                    "salary": dict(salary),
+                    "financial_transaction": dict(financial_transaction) if financial_transaction else None,
+                    "recoveries": [dict(row) for row in recoveries],
+                    "deductions": [dict(row) for row in deductions],
+                },
+            )
             cursor.execute("DELETE FROM salary_advance_recoveries WHERE salary_id = %s;", (salary_id,))
             cursor.execute("DELETE FROM salary_deduction_allocations WHERE salary_id = %s;", (salary_id,))
             cursor.execute("DELETE FROM driver_salaries WHERE id = %s;", (salary_id,))
@@ -536,6 +629,7 @@ def cancel_driver_salary(salary_id: int) -> None:
                 )
             for advance_id in affected_advances:
                 _refresh_advance_status(cursor, advance_id)
+            return audit
 
 
 def reclassify_expense_as_driver_salary(

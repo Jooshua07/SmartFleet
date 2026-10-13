@@ -40,6 +40,7 @@ def main() -> None:
 
         from services.bus_service import create_bus
         from services.driver_money_service import (
+            cancel_driver_advance,
             get_salary_preview,
             list_outstanding_advances,
             record_driver_advance,
@@ -49,11 +50,15 @@ def main() -> None:
         from services.finance_service import get_business_balance
         from services.loan_service import (
             add_business_loan,
+            cancel_loan_repayment,
+            cancel_owner_drawing,
+            cancel_owner_loan_transaction,
             get_owner_money_summary,
             list_business_loans,
             record_business_repayment_to_owner,
             record_loan_repayment,
             record_owner_drawing,
+            record_owner_loan_to_business,
         )
         from services.performance_service import get_operating_summary
         from services.preset_service import set_driver_salary_preset
@@ -112,6 +117,29 @@ def main() -> None:
         summary = get_operating_summary(date(2026, 10, 1), date(2026, 10, 31))
         if summary["expenses"] != 2500:
             raise RuntimeError(f"Operating expenses should count salary once as K2,500, got {summary['expenses']}")
+
+        extra_advance = record_driver_advance(employment["employment_id"], date(2026, 10, 9), 500, "Mistaken advance")
+        cancel_driver_advance(extra_advance["id"], "Smoke correction")
+        if list_outstanding_advances(employment["employment_id"]):
+            raise RuntimeError("Cancelled advance should not remain outstanding.")
+
+        extra_repayment = record_loan_repayment(date(2026, 10, 9), 1000, "BUSINESS_ACCOUNT", loan_id=loan["id"])
+        cancel_loan_repayment(extra_repayment["id"], "Smoke correction")
+        smoke_loan = next(item for item in list_business_loans() if item["id"] == loan["id"])
+        if smoke_loan["outstanding_principal"] != 15000:
+            raise RuntimeError("Cancelled loan repayment should restore loan outstanding.")
+
+        extra_drawing = record_owner_drawing(date(2026, 10, 9), 250)
+        cancel_owner_drawing(extra_drawing["id"], "Smoke correction")
+
+        extra_owner_loan = record_owner_loan_to_business(date(2026, 10, 10), 750)
+        cancel_owner_loan_transaction(extra_owner_loan["id"], "Smoke correction")
+
+        with psycopg.connect(**_connection_kwargs(temp_db)) as audit_conn:
+            with audit_conn.cursor() as audit_cursor:
+                audit_cursor.execute("SELECT COUNT(*) FROM correction_audit;")
+                if audit_cursor.fetchone()[0] != 4:
+                    raise RuntimeError("Expected four correction audit records from smoke corrections.")
 
         print(f"Money workflow smoke passed in {temp_db}.")
     finally:

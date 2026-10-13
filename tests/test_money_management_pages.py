@@ -107,15 +107,24 @@ OWNER_SUMMARY = {
     "owner_balance": Decimal("30000.00"),
     "owner_funded": Decimal("30000.00"),
     "owner_repaid": Decimal("0.00"),
-    "transactions": [
-        {
-            "transaction_date": date(2026, 10, 6),
-            "transaction_type": "LOAN_TO_BUSINESS",
-            "amount": Decimal("30000.00"),
-            "description": "Owner paid lender directly",
-        }
-    ],
+    "transactions": [],
 }
+
+OWNER_ACTIVITY = [
+    {
+        "record_type": "OWNER_TRANSACTION",
+        "record_id": 40,
+        "transaction_date": date(2026, 10, 6),
+        "transaction_type": "OWNER_FUNDED",
+        "label": "Owner funded payment",
+        "amount": Decimal("30000.00"),
+        "description": "Owner paid lender directly",
+        "notes": None,
+        "expense_id": None,
+        "financial_transaction_id": None,
+        "linked_to_loan_repayment": True,
+    }
+]
 
 
 class MoneyManagementPageTests(unittest.TestCase):
@@ -182,6 +191,7 @@ class MoneyManagementPageTests(unittest.TestCase):
     def test_owner_money_page_shows_distinct_owner_workflows(self):
         with (
             patch("services.loan_service.get_owner_money_summary", return_value=OWNER_SUMMARY),
+            patch("services.loan_service.list_owner_money_activity", return_value=OWNER_ACTIVITY),
             patch("services.loan_service.list_business_loans", return_value=LOANS),
             patch("utils.dates.today_lusaka", return_value=date(2026, 10, 13)),
         ):
@@ -199,6 +209,7 @@ class MoneyManagementPageTests(unittest.TestCase):
     def test_owner_pays_business_loan_mode_does_not_use_business_cash_language(self):
         with (
             patch("services.loan_service.get_owner_money_summary", return_value=OWNER_SUMMARY),
+            patch("services.loan_service.list_owner_money_activity", return_value=OWNER_ACTIVITY),
             patch("services.loan_service.list_business_loans", return_value=LOANS),
             patch("utils.dates.today_lusaka", return_value=date(2026, 10, 13)),
         ):

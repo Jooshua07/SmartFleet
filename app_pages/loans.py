@@ -3,6 +3,7 @@ import streamlit as st
 from components.cards import empty_state
 from services.loan_service import (
     add_business_loan,
+    cancel_loan_repayment,
     list_business_loans,
     list_loan_repayments,
     record_loan_repayment,
@@ -127,7 +128,20 @@ if repayments:
     for repayment in repayments:
         lender = repayment["lender"] or "Unidentified lender"
         source = "Owner personal" if repayment["payment_source"] == "OWNER_PERSONAL" else "Business funds"
-        st.caption(
-            f"{format_date(repayment['repayment_date'])} | {lender} | "
-            f"{format_whole_kwacha(repayment['amount'])} | {source}"
-        )
+        with st.container(border=True):
+            st.caption(
+                f"{format_date(repayment['repayment_date'])} | {lender} | "
+                f"{format_whole_kwacha(repayment['amount'])} | {source}"
+            )
+            with st.expander("Correction"):
+                with st.form(f"cancel_loan_repayment_{repayment['id']}", clear_on_submit=True):
+                    reason = st.text_input("Correction reason", key=f"loan_repayment_reason_{repayment['id']}")
+                    submitted = st.form_submit_button("Reverse repayment", icon=":material/undo:")
+                if submitted:
+                    try:
+                        cancel_loan_repayment(repayment["id"], reason)
+                        st.cache_data.clear()
+                        st.success("Repayment reversed.", icon=":material/check_circle:")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Could not reverse repayment: {exc}", icon=":material/error:")
