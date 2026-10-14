@@ -27,3 +27,7 @@ Migration 031 extends existing maintenance records with transport, servicing fla
 ## Stage 4
 
 Finance shows Collections, Operating Costs and Other Payments, with a separate non-operating breakdown and five period-aware balance metrics. Historical expenses reuse their existing ledger payment; changing scope clears obsolete allocation rows. Existing specialized and maintenance-linked payments are guarded against ordinary editing/deletion. Older expenses can be selected from expanded history. Expense service/page tests and disposable scope-change scenarios passed.
+
+## Stage 5
+
+Reports is a single scrollable page with overview, each bus, operating categories, maintenance, driver money, loans/owner money and quality checks. Status days use effective-dated history; expected cashing uses saved collection coverage only. Estimated allocations are labelled. Live read-only page test rendered all six overview metrics with no exceptions. October figures remain K16,200 received, K2,000 operating costs, K15,000 principal repayment and K-800 closing cash.

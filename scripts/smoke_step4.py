@@ -68,6 +68,15 @@ def main():
         with get_connection() as conn:
             assert conn.execute('SELECT count(*) FROM financial_transactions').fetchone()[0]==2
         print('Historical ordinary expense: General -> Bus -> General and one updated payment PASS')
+        from services.business_report_service import get_business_report
+        report=get_business_report(date(2026,10,1),date(2026,10,31))
+        assert report['operating']['expenses']==700
+        assert report['balance']['closing_balance']==-700
+        assert sum(row['Amount (K)'] for row in report['categories'])==700
+        assert report['history'][0]['total_cost']==200
+        empty=get_business_report(date(2026,11,1),date(2026,11,1))
+        assert empty['operating']['expenses']==0 and empty['balance']['closing_balance']==-700
+        print('Report: categories, maintenance counted once, empty month and negative balance PASS')
     finally:
         with psycopg.connect(**kwargs,dbname='postgres',autocommit=True) as conn:
             conn.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))
