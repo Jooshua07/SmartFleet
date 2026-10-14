@@ -11,6 +11,8 @@ from services.finance_service import (
     get_period_ledger,
 )
 from utils.formatting import format_date, format_whole_kwacha
+from services.preset_service import get_reporting_baseline_date
+from utils.dates import today_lusaka
 
 
 @st.cache_data(ttl=15, max_entries=64, show_spinner=False)
@@ -48,6 +50,10 @@ with fixed_page_controls():
         key="finance_section",
         label_visibility="collapsed",
     )
+
+if selected_section == 'Balances':
+    current_balance = get_period_balance(get_reporting_baseline_date(), today_lusaka())
+    st.metric('Business Balance Now', format_whole_kwacha(current_balance['closing_balance']), border=True)
 
 start_date, end_date = period_controls('finance')
 st.caption(f"{format_date(start_date)} to {format_date(end_date)}")
@@ -101,18 +107,9 @@ else:
     balance_data = _load_balances(start_date, end_date)
     business_balance = balance_data["business_balance"]
 
-    st.metric(
-        "Closing Business Balance",
-        format_whole_kwacha(business_balance["closing_balance"]),
-        border=True,
-    )
-    st.caption(f"From reporting baseline {format_date(business_balance['baseline_date'])}")
-
     with st.container(horizontal=True):
-        st.metric("Opening Business Balance", format_whole_kwacha(business_balance['opening_balance']), border=True)
-        st.metric("Money in", format_whole_kwacha(business_balance["money_in"]), border=True)
-        st.metric("Money out", format_whole_kwacha(business_balance["money_out"]), border=True)
-        st.metric("Net Movement", format_whole_kwacha(business_balance['net_movement']), border=True)
+        st.metric("Money Received", format_whole_kwacha(business_balance["money_in"]), border=True)
+        st.metric("Money Paid Out", format_whole_kwacha(business_balance["money_out"]), border=True)
 
     st.caption(
         "Loan repayments are financing payments, so they reduce Business Balance without being mixed into operating expenses."

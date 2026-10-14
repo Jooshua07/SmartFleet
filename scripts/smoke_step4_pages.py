@@ -6,6 +6,8 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 from services.finance_service import get_period_balance
+from services.preset_service import get_reporting_baseline_date
+from utils.dates import today_lusaka
 from utils.formatting import format_whole_kwacha
 
 
@@ -26,8 +28,11 @@ def main():
         assert app.session_state['finance_end']==date(2026,10,4)
         if section=='Balances':
             expected=get_period_balance(date(2026,10,1),date(2026,10,4))
-            metric=next(row for row in app.metric if row.label=='Closing Business Balance')
-            assert metric.value==format_whole_kwacha(expected['closing_balance'])
+            current=get_period_balance(get_reporting_baseline_date(),today_lusaka())
+            metrics={row.label:row.value for row in app.metric}
+            assert metrics=={'Business Balance Now':format_whole_kwacha(current['closing_balance']),
+                            'Money Received':format_whole_kwacha(expected['money_in']),
+                            'Money Paid Out':format_whole_kwacha(expected['money_out'])}
     app.date_input(key='finance_start').set_value(date(2026,10,10)).run()
     assert app.error and not app.exception
     app=AppTest.from_file(root/'app_pages/home.py',default_timeout=30).run()
