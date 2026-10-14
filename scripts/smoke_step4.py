@@ -77,6 +77,16 @@ def main():
         empty=get_business_report(date(2026,11,1),date(2026,11,1))
         assert empty['operating']['expenses']==0 and empty['balance']['closing_balance']==-700
         print('Report: categories, maintenance counted once, empty month and negative balance PASS')
+        from services.report_export_service import report_export_tables, excel_export
+        from services.business_report_service import get_reconciliation
+        from openpyxl import load_workbook
+        from io import BytesIO
+        tables=report_export_tables(report)
+        assert sum(row['Amount (K)'] for row in tables['Expense Summary'])==report['operating']['expenses']
+        workbook=load_workbook(BytesIO(excel_export(tables)))
+        assert len(workbook.sheetnames)==5
+        assert get_reconciliation(date(2026,10,31))['closing_balance']==-700
+        print('Exports: five Excel sheets open; category totals match screen; ledger reconciliation PASS')
     finally:
         with psycopg.connect(**kwargs,dbname='postgres',autocommit=True) as conn:
             conn.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))

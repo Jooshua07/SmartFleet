@@ -7,7 +7,7 @@ from psycopg.rows import dict_row
 
 from database.connection import get_connection
 from services.bus_account_service import get_bus_contribution_summary
-from services.finance_service import get_period_balance, get_period_ledger
+from services.finance_service import get_period_balance, get_period_ledger, get_collections
 from services.maintenance_service import get_servicing_history, get_servicing_schedules
 from services.performance_service import get_operating_summary, EXCLUDED_OPERATING_EXPENSE_CATEGORIES
 from services.preset_service import get_reporting_baseline_date
@@ -95,6 +95,7 @@ def get_business_report(start_date: date, end_date: date) -> dict:
     known_expected = sum((row['expected_cashing'] for row in bus_summary['buses'] if row['expected_cashing'] is not None),ZERO)
     expected_complete = all(row['expected_cashing'] is not None for row in bus_summary['buses']) and bool(collections)
     result=dict(start=start_date,end=end_date,operating=summary,balance=balance,collections=collections,
+        collection_headers=get_collections(start_date,end_date),
         expenses=operating_expenses,buses=bus_summary['buses'],shared_costs=bus_summary['shared_general_costs'],
         categories=[{'Category':key,'Amount (K)':value} for key,value in sorted(categories.items(),key=lambda item:item[1],reverse=True)],
         history=history,schedules=schedules,salaries=salaries,advances=advances,loans=loans,
@@ -136,6 +137,15 @@ def get_report_warnings(start_date, end_date, report=None):
               OR (m.total_cost=0 AND e.id IS NOT NULL))''','A servicing event needs its cost or payment status checked.'),
         ('''SELECT COUNT(*) AS count FROM driver_salaries s WHERE s.payment_date BETWEEN %s AND %s AND s.status<>'CANCELLED'
             AND s.advance_recovery<>COALESCE((SELECT SUM(r.amount) FROM salary_advance_recoveries r WHERE r.salary_id=s.id),0)''','A salary advance recovery needs checking.'),
+        ('''SELECT COUNT(*) AS count FROM (SELECT expense_id FROM maintenance
+            WHERE completed_date BETWEEN %s AND %s AND expense_id IS NOT NULL
+            GROUP BY expense_id HAVING COUNT(*)>1) duplicates''','Multiple maintenance events share the same payment; check for duplicate costs.'),
+        ('''SELECT COUNT(*) AS count FROM remittance_collections c LEFT JOIN financial_transactions f ON f.id=c.financial_transaction_id
+            WHERE c.collection_date BETWEEN %s AND %s AND c.total_amount>0
+            AND (f.id IS NULL OR f.amount<>c.total_amount OR f.transaction_date<>c.collection_date)''','A cashing receipt needs its financial reference checked.'),
+        ('''SELECT COUNT(*) AS count FROM loan_repayments r LEFT JOIN financial_transactions f ON f.id=r.financial_transaction_id
+            WHERE r.repayment_date BETWEEN %s AND %s AND r.payment_source='BUSINESS_ACCOUNT'
+            AND (f.id IS NULL OR f.amount<>r.amount OR f.transaction_type<>'LOAN_REPAYMENT')''','A business loan repayment needs its cash payment checked.'),
         ('''SELECT COUNT(*) AS count FROM bus_status_history a JOIN bus_status_history b ON a.bus_id=b.bus_id AND a.id<b.id
             WHERE a.effective_from<=%s AND COALESCE(a.effective_to,'infinity'::date)>=%s
             AND daterange(a.effective_from,a.effective_to,'[]') && daterange(b.effective_from,b.effective_to,'[]')''','A bus has overlapping historical status dates.'),
@@ -159,4 +169,7 @@ def get_report_warnings(start_date, end_date, report=None):
             warnings.append('Recorded cashing differs from its bus allocations.')
         if report['balance']['collections']!=report['operating']['revenue']:
             warnings.append('Cashing receipts differ from their ledger total.')
+        attributed=sum((row['attributed_costs'] for row in report['buses']),ZERO)+report['shared_costs']
+        if attributed!=report['operating']['expenses']:
+            warnings.append('Bus and general cost attribution differs from total operating costs.')
     return warnings

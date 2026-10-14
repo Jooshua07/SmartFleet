@@ -31,3 +31,7 @@ Finance shows Collections, Operating Costs and Other Payments, with a separate n
 ## Stage 5
 
 Reports is a single scrollable page with overview, each bus, operating categories, maintenance, driver money, loans/owner money and quality checks. Status days use effective-dated history; expected cashing uses saved collection coverage only. Estimated allocations are labelled. Live read-only page test rendered all six overview metrics with no exceptions. October figures remain K16,200 received, K2,000 operating costs, K15,000 principal repayment and K-800 closing cash.
+
+## Stage 6
+
+Five period-aware CSV/Excel summaries and a complete five-sheet workbook. Excel numeric/date round trips passed, including K4,000.25 and negative K800; formula-like user text stays text. Reconciliation uses baseline-to-end ledger totals only. Quality checks flag unresolved allocations/loans, payment links, recovery mismatches, servicing linkage, status overlaps and total disagreements; General expenses are valid. Disposable report/export tests reconcile category costs and cash totals without changing live records.

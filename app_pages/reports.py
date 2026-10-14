@@ -3,6 +3,9 @@ import streamlit as st
 
 from components.reporting_period import period_controls
 from services.business_report_service import get_business_report
+from services.business_report_service import get_reconciliation
+from services.preset_service import get_reporting_baseline_date
+from services.report_export_service import report_export_tables, csv_export, excel_export
 from services.maintenance_service import servicing_warning
 from utils.dates import today_lusaka
 from utils.formatting import format_date, format_whole_kwacha as money
@@ -101,3 +104,27 @@ if report['warnings']:
         st.warning(warning)
 else:
     st.success('Report totals and recorded payment links agree.')
+
+st.subheader('Ledger reconciliation')
+baseline=get_reporting_baseline_date()
+reconcile_end=st.date_input('Reconcile through',value=max(end,baseline),min_value=baseline,format='DD/MM/YYYY',key='report_reconcile_end')
+reconciliation=get_reconciliation(reconcile_end)
+st.caption(f'From reporting baseline {format_date(baseline)}')
+with st.container(horizontal=True):
+    for label,key in [('Opening reporting balance','opening_balance'),('Money received','money_in'),
+                      ('Operating payments','operating_payments'),('Other payments','other_payments'),
+                      ('Money out','money_out'),('Net movement','net_movement'),('Closing Business Balance','closing_balance')]:
+        st.metric(label,money(reconciliation[key]),border=True)
+if reconciliation['movements']:
+    st.dataframe(pd.DataFrame(reconciliation['movements']),hide_index=True,alt='Actual classified ledger movements since reporting baseline')
+st.caption('Opening balance plus money received minus money out equals closing balance. Owner-paid external settlements are excluded from business cash.')
+
+st.subheader('Downloads')
+tables=report_export_tables(report)
+for name,rows in tables.items():
+    filename=f"smartfleet_{name.lower().replace(' ','_')}_{start}_{end}"
+    with st.expander(name):
+        st.download_button('CSV',csv_export(rows),file_name=filename+'.csv',mime='text/csv',icon=':material/download:',key=filename+'_csv')
+        st.download_button('Excel',excel_export({name:rows}),file_name=filename+'.xlsx',mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',icon=':material/download:',key=filename+'_xlsx')
+st.download_button('Complete Excel report',excel_export(tables),file_name=f'smartfleet_report_{start}_{end}.xlsx',
+    mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',icon=':material/download:')
