@@ -36,9 +36,10 @@ def _load_expenses(start_date, end_date):
 
 @st.cache_data(ttl=15, max_entries=16, show_spinner=False)
 def _load_balances(start_date, end_date):
+    ledger = get_period_ledger(start_date, end_date)
     return {
-        "business_balance": get_period_balance(start_date, end_date),
-        "ledger": get_period_ledger(start_date, end_date),
+        "business_balance": get_period_balance(start_date, end_date, ledger=ledger),
+        "ledger": ledger,
     }
 
 

@@ -5,10 +5,7 @@ from psycopg.rows import dict_row
 
 from database.connection import get_connection
 from services.preset_service import get_reporting_baseline_date
-
-
-OPERATING_PAYMENT_TYPES = {'EXPENSE', 'DRIVER_SALARY', 'TRANSFER_FEE', 'OTHER'}
-OTHER_PAYMENT_TYPES = {'LOAN_REPAYMENT', 'OWNER_LOAN_REPAYMENT', 'OWNER_DRAWING', 'DRIVER_ADVANCE'}
+from services.financial_rules import OPERATING_PAYMENT_TYPES
 
 
 def get_period_ledger(start_date: date, end_date: date) -> list[dict]:
@@ -49,7 +46,9 @@ def summarize_ledger(rows: list[dict], opening=Decimal('0')) -> dict:
     return totals
 
 
-def get_period_balance(start_date: date, end_date: date) -> dict:
+def get_period_balance(start_date: date, end_date: date, ledger: list[dict] | None = None) -> dict:
+    if start_date > end_date:
+        raise ValueError('End date must be on or after start date.')
     baseline = get_reporting_baseline_date()
     # The approved reporting baseline is a clean-slate opening of zero.
     with get_connection() as conn:
@@ -59,7 +58,11 @@ def get_period_balance(start_date: date, end_date: date) -> dict:
                 WHERE transaction_date >= %s AND transaction_date < %s
                   AND transaction_type <> 'TRANSFER' ''', (baseline, start_date))
             opening = cursor.fetchone()['opening']
-    result = summarize_ledger(get_period_ledger(max(start_date, baseline), end_date), opening) if end_date >= max(start_date, baseline) else summarize_ledger([], opening)
+    if ledger is None:
+        ledger = get_period_ledger(max(start_date, baseline), end_date) if end_date >= max(start_date, baseline) else []
+    else:
+        ledger = [row for row in ledger if max(start_date, baseline) <= row['transaction_date'] <= end_date]
+    result = summarize_ledger(ledger, opening)
     result['baseline_date'] = baseline
     return result
 

@@ -14,7 +14,7 @@ from utils.formatting import format_whole_kwacha
 def main():
     root=Path(__file__).resolve().parents[1]
     for name in ('home','buses','finance','more','record_cashing','record_expense','record_servicing','accounts',
-                 'business_presets','backups','reports','reminders','driver_money','loans','owner_money','add_bus'):
+                 'business_presets','backups','reports','reminders','driver_money','loans','owner_money','add_bus','help_guide'):
         st.cache_data.clear()
         app=AppTest.from_file(root/'app_pages'/f'{name}.py',default_timeout=30).run()
         assert not app.exception,(name,[row.message for row in app.exception])
@@ -41,7 +41,7 @@ def main():
     app.segmented_control(key='home_period').set_value('3 months').run()
     assert app.session_state['home_chart_period']=='6 Months'
     assert not app.exception
-    print('16 live read-only pages PASS; Finance tab persistence, historical balances, invalid dates and independent Home controls PASS')
+    print('17 live read-only pages PASS; Finance tab persistence, historical balances, invalid dates and independent Home controls PASS')
 
 
 if __name__=='__main__':

@@ -8,6 +8,7 @@ from psycopg.rows import dict_row
 from database.connection import get_connection
 from services.preset_service import get_reporting_baseline_date
 from services.finance_service import get_period_balance, get_period_ledger
+from services.financial_rules import EXCLUDED_OPERATING_EXPENSE_CATEGORIES, OPERATING_EXPENSE_PREDICATE
 from utils.reporting_periods import scheduled_chart_dates
 
 
@@ -46,99 +47,63 @@ def get_business_financial_timeline(start_date: date, end_date: date) -> list[di
     start_date = max(start_date, get_reporting_baseline_date())
     if start_date > end_date:
         return []
+    ledger = get_period_ledger(start_date, end_date)
     return build_financial_timeline(start_date, end_date,
-        get_business_performance_series(start_date, end_date),
-        get_period_ledger(start_date, end_date), get_period_balance(start_date, end_date)['opening_balance'])
+        get_business_performance_series(start_date, end_date), ledger,
+        get_period_balance(start_date, end_date, ledger=ledger)['opening_balance'])
 
 
-EXCLUDED_OPERATING_EXPENSE_CATEGORIES = {
-    "Driver Advances",
-    "Driver Salaries",
-    "Loan Repayments",
-    "Owner Drawings",
-}
+def _load_operating_activity(cursor, start_date: date, end_date: date) -> list[dict]:
+    cursor.execute(
+        f"""
+        WITH activity AS (
+            SELECT collection_date AS activity_date, total_amount AS revenue,
+                0::numeric AS ordinary_expenses, 0::numeric AS salary_costs, 0::numeric AS other_costs
+            FROM remittance_collections WHERE collection_date BETWEEN %s AND %s
+            UNION ALL
+            SELECT e.expense_date, 0, e.amount, 0, 0
+            FROM expenses e JOIN expense_categories ec ON ec.id=e.category_id
+            LEFT JOIN financial_transactions ft ON ft.id=e.financial_transaction_id
+            WHERE e.expense_date BETWEEN %s AND %s AND {OPERATING_EXPENSE_PREDICATE}
+            UNION ALL
+            SELECT make_date(salary_year,salary_month,1), 0, 0, prorated_salary, 0
+            FROM driver_salaries WHERE status<>'CANCELLED'
+                AND make_date(salary_year,salary_month,1) BETWEEN %s AND %s
+            UNION ALL
+            SELECT ft.transaction_date, 0, 0, 0, ft.amount
+            FROM financial_transactions ft WHERE ft.transaction_date BETWEEN %s AND %s
+                AND ft.direction='OUT' AND ft.transaction_type IN ('OTHER','TRANSFER_FEE')
+                AND NOT EXISTS (SELECT 1 FROM expenses e WHERE e.financial_transaction_id=ft.id)
+        )
+        SELECT activity_date, SUM(revenue) AS revenue, SUM(ordinary_expenses) AS ordinary_expenses,
+            SUM(salary_costs) AS salary_costs, SUM(other_costs) AS other_costs
+        FROM activity GROUP BY activity_date ORDER BY activity_date
+        """,
+        (start_date, end_date) * 4,
+    )
+    return cursor.fetchall()
 
 
 def get_operating_summary(start_date: date, end_date: date) -> dict:
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """
-                SELECT COALESCE(SUM(total_amount), 0) AS revenue
-                FROM remittance_collections
-                WHERE collection_date BETWEEN %s AND %s;
-                """,
-                (start_date, end_date),
-            )
-            revenue = cursor.fetchone()["revenue"] or Decimal("0")
-
-            cursor.execute(
-                """
-                SELECT COALESCE(SUM(e.amount), 0) AS expenses
-                FROM expenses e
-                JOIN expense_categories ec ON ec.id = e.category_id
-                LEFT JOIN financial_transactions ft ON ft.id = e.financial_transaction_id
-                WHERE e.expense_date BETWEEN %s AND %s
-                  AND ec.name <> ALL(%s)
-                  AND (
-                    e.payment_source = 'OWNER_PERSONAL'
-                    OR ft.transaction_type IN ('EXPENSE', 'TRANSFER_FEE', 'OTHER')
-                  );
-                """,
-                (start_date, end_date, list(EXCLUDED_OPERATING_EXPENSE_CATEGORIES)),
-            )
-            ordinary_expenses = cursor.fetchone()["expenses"] or Decimal("0")
-
-            cursor.execute(
-                """
-                SELECT COALESCE(SUM(prorated_salary), 0) AS salary_costs
-                FROM driver_salaries
-                WHERE status <> 'CANCELLED'
-                  AND make_date(salary_year, salary_month, 1) BETWEEN %s AND %s;
-                """,
-                (start_date, end_date),
-            )
-            salary_costs = cursor.fetchone()["salary_costs"] or Decimal("0")
-
-            cursor.execute(
-                """
-                SELECT COALESCE(SUM(amount), 0) AS other_costs
-                FROM financial_transactions ft
-                WHERE ft.transaction_date BETWEEN %s AND %s
-                  AND ft.direction = 'OUT'
-                  AND ft.transaction_type IN ('OTHER', 'TRANSFER_FEE')
-                  AND NOT EXISTS (
-                    SELECT 1
-                    FROM expenses e
-                    WHERE e.financial_transaction_id = ft.id
-                  );
-                """,
-                (start_date, end_date),
-            )
-            other_costs = cursor.fetchone()["other_costs"] or Decimal("0")
-
+            activity = _load_operating_activity(cursor, start_date, end_date)
             cursor.execute(
                 """
                 SELECT COALESCE(SUM(expected_amount - actual_amount), 0) AS pending
-                FROM remittances r
-                JOIN remittance_collections c ON c.id = r.collection_id
+                FROM remittances r JOIN remittance_collections c ON c.id=r.collection_id
                 WHERE c.collection_date BETWEEN %s AND %s
-                  AND expected_amount IS NOT NULL
-                  AND expected_amount > actual_amount;
+                  AND expected_amount IS NOT NULL AND expected_amount > actual_amount
                 """,
                 (start_date, end_date),
             )
             pending = cursor.fetchone()["pending"] or Decimal("0")
 
-    expenses = ordinary_expenses + salary_costs + other_costs
-    return {
-        "revenue": revenue,
-        "expenses": expenses,
-        "pending_remittances": pending,
-        "ordinary_expenses": ordinary_expenses,
-        "salary_costs": salary_costs,
-        "other_costs": other_costs,
-    }
+    totals = {field: sum((row[field] for row in activity), Decimal("0"))
+              for field in ("revenue", "ordinary_expenses", "salary_costs", "other_costs")}
+    totals["expenses"] = totals["ordinary_expenses"] + totals["salary_costs"] + totals["other_costs"]
+    totals["pending_remittances"] = pending
+    return totals
 
 
 def _daily_points(start_date: date, end_date: date) -> dict[date, dict]:
@@ -192,69 +157,11 @@ def get_business_performance_series(start_date: date, end_date: date, grouping: 
 
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
-            cursor.execute(
-                """
-                SELECT collection_date AS activity_date, COALESCE(SUM(total_amount), 0) AS amount
-                FROM remittance_collections
-                WHERE collection_date BETWEEN %s AND %s
-                GROUP BY collection_date;
-                """,
-                (start_date, end_date),
-            )
-            for row in cursor.fetchall():
-                points[row["activity_date"]]["revenue"] += row["amount"]
-
-            cursor.execute(
-                """
-                SELECT e.expense_date AS activity_date, COALESCE(SUM(e.amount), 0) AS amount
-                FROM expenses e
-                JOIN expense_categories ec ON ec.id = e.category_id
-                LEFT JOIN financial_transactions ft ON ft.id = e.financial_transaction_id
-                WHERE e.expense_date BETWEEN %s AND %s
-                  AND ec.name <> ALL(%s)
-                  AND (
-                    e.payment_source = 'OWNER_PERSONAL'
-                    OR ft.transaction_type IN ('EXPENSE', 'TRANSFER_FEE', 'OTHER')
-                  )
-                GROUP BY e.expense_date;
-                """,
-                (start_date, end_date, list(EXCLUDED_OPERATING_EXPENSE_CATEGORIES)),
-            )
-            for row in cursor.fetchall():
-                points[row["activity_date"]]["operating_expenses"] += row["amount"]
-
-            cursor.execute(
-                """
-                SELECT make_date(salary_year, salary_month, 1) AS activity_date,
-                       COALESCE(SUM(prorated_salary), 0) AS amount
-                FROM driver_salaries
-                WHERE status <> 'CANCELLED'
-                  AND make_date(salary_year, salary_month, 1) BETWEEN %s AND %s
-                GROUP BY make_date(salary_year, salary_month, 1);
-                """,
-                (start_date, end_date),
-            )
-            for row in cursor.fetchall():
-                points[row["activity_date"]]["operating_expenses"] += row["amount"]
-
-            cursor.execute(
-                """
-                SELECT transaction_date AS activity_date, COALESCE(SUM(amount), 0) AS amount
-                FROM financial_transactions ft
-                WHERE transaction_date BETWEEN %s AND %s
-                  AND direction = 'OUT'
-                  AND transaction_type IN ('OTHER', 'TRANSFER_FEE')
-                  AND NOT EXISTS (
-                    SELECT 1
-                    FROM expenses e
-                    WHERE e.financial_transaction_id = ft.id
-                  )
-                GROUP BY transaction_date;
-                """,
-                (start_date, end_date),
-            )
-            for row in cursor.fetchall():
-                points[row["activity_date"]]["operating_expenses"] += row["amount"]
+            for row in _load_operating_activity(cursor, start_date, end_date):
+                points[row["activity_date"]]["revenue"] = row["revenue"]
+                points[row["activity_date"]]["operating_expenses"] = (
+                    row["ordinary_expenses"] + row["salary_costs"] + row["other_costs"]
+                )
 
     for point in points.values():
         point["net_profit_loss"] = point["revenue"] - point["operating_expenses"]

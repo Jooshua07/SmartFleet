@@ -4,13 +4,14 @@ from decimal import Decimal
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
+from services.financial_rules import OPERATING_EXPENSE_PREDICATE
 
 
 def get_bus_contribution_summary(start_date: date, end_date: date) -> dict:
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
-                """
+                f"""
                 WITH revenue_by_bus AS (
                     SELECT
                         r.bus_id,
@@ -37,11 +38,7 @@ def get_bus_contribution_summary(start_date: date, end_date: date) -> dict:
                     LEFT JOIN financial_transactions ft ON ft.id = e.financial_transaction_id
                     WHERE e.scope = 'BUS'
                       AND e.expense_date BETWEEN %s AND %s
-                      AND ec.name NOT IN ('Driver Advances', 'Driver Salaries', 'Loan Repayments', 'Owner Drawings')
-                      AND (
-                        e.payment_source = 'OWNER_PERSONAL'
-                        OR ft.transaction_type IN ('EXPENSE', 'TRANSFER_FEE', 'OTHER')
-                      )
+                      AND {OPERATING_EXPENSE_PREDICATE}
                     GROUP BY e.bus_id
                 ),
                 allocated_expenses AS (
@@ -54,11 +51,7 @@ def get_bus_contribution_summary(start_date: date, end_date: date) -> dict:
                     LEFT JOIN financial_transactions ft ON ft.id = e.financial_transaction_id
                     WHERE e.scope = 'MULTI_BUS'
                       AND e.expense_date BETWEEN %s AND %s
-                      AND ec.name NOT IN ('Driver Advances', 'Driver Salaries', 'Loan Repayments', 'Owner Drawings')
-                      AND (
-                        e.payment_source = 'OWNER_PERSONAL'
-                        OR ft.transaction_type IN ('EXPENSE', 'TRANSFER_FEE', 'OTHER')
-                      )
+                      AND {OPERATING_EXPENSE_PREDICATE}
                     GROUP BY ea.bus_id
                 ),
                 salary_assignments AS (
@@ -126,7 +119,7 @@ def get_bus_contribution_summary(start_date: date, end_date: date) -> dict:
             buses = cursor.fetchall()
 
             cursor.execute(
-                """
+                f"""
                 WITH general_expenses AS (
                     SELECT COALESCE(SUM(e.amount), 0) AS amount
                     FROM expenses e
@@ -134,11 +127,7 @@ def get_bus_contribution_summary(start_date: date, end_date: date) -> dict:
                     LEFT JOIN financial_transactions ft ON ft.id = e.financial_transaction_id
                     WHERE e.scope = 'GENERAL'
                       AND e.expense_date BETWEEN %s AND %s
-                      AND ec.name NOT IN ('Driver Advances', 'Driver Salaries', 'Loan Repayments', 'Owner Drawings')
-                      AND (
-                        e.payment_source = 'OWNER_PERSONAL'
-                        OR ft.transaction_type IN ('EXPENSE', 'TRANSFER_FEE', 'OTHER')
-                      )
+                      AND {OPERATING_EXPENSE_PREDICATE}
                 ),
                 salary_ids_with_one_bus AS (
                     SELECT ds.id

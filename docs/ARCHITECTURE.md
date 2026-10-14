@@ -1,5 +1,13 @@
 # SmartFleet architecture
 
+## Step 5 help and maintainability
+
+`utils/help_content.py` holds immutable task guides and pure search/category filtering. `app_pages/help_guide.py` renders them with native widgets and expanders, routed through `st.Page` and More. It performs no database writes.
+
+`services/financial_rules.py` holds shared operating-category and payment-type definitions plus the fixed-alias ordinary expense SQL predicate. `_load_operating_activity` feeds both operating summaries and daily/weekly series; it recognizes payroll once on the first day of its month. `get_period_balance` optionally consumes already-fetched ledger rows, keeping baseline/date filters. Report warning checks share one connection. The original calculations are protected by before/after snapshots and disposable tests.
+
+Local Windows edits missed the default event watcher in a reproducible fixture. Polling with runOnSave enabled now lets Streamlit invalidate/re-import changed services. App-level `importlib.reload` workarounds are removed. No persistent global database connection was introduced.
+
 ## Step 4 reporting and servicing
 
 `utils/reporting_periods.py` owns calendar dates. `components/reporting_period.py` owns independent widget keys. Finance shares one period across tabs; Home chart and Reports use separate keys. `finance_service.get_period_balance` carries clean-slate baseline cash forward and excludes internal transfers. `performance_service.get_business_financial_timeline` maps real dated activity to Thursday/Sunday points, with a labelled trailing endpoint when required. Payroll cost is recognized at the first of the earned month; salary cash uses its payment date.

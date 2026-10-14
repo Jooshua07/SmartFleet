@@ -2,6 +2,12 @@
 
 Last updated: 2026-10-14
 
+## Step 5 verification
+
+98 unittest tests passed. Help tests cover categories/search/no results/restoration; ledger tests cover cutoff filtering, reused rows, invalid ranges and recording/classification consistency. All four disposable financial smoke scripts passed. `smoke_step4_pages.py` now reads 17 pages including Help. Help/mobile navigation/search/expansion and changed-screen/chart browser checks passed at 390x844 and 1440x1000. `smoke_service_reload.py` verifies changed dependencies and new exports with polling, terminates its temporary server, and requires port 8503 to be free. Playwright is an existing development tool, not a new production dependency.
+
+`verify_step5_records.py --capture` records a baseline only if none exists; without that flag it compares all rows in 39 live tables. `verify_step5_calculations.py` compares financial/report/export calculations across October and empty later months. Snapshot files and test screenshots remain ignored under backups. Scripts are read-only except disposable test DB/fixture creation. Initial browser checks needed Enter to submit a text-input search, and the reload fixture needed startup watcher registration time; corrected checks passed. Detailed results: `STEP5_IMPLEMENTATION.md`.
+
 ## Step 4 verification
 
 Baseline 77 tests passed; final suite 93 passed. New tests cover calendar/year boundaries, transfer exclusion, carry-forward, cumulative Thursday/Sunday dates, trailing expenses, negative/large balances, servicing thresholds, form submission/reset/errors and CSV/Excel round trips. `smoke_step4.py` tests paid and zero-cost servicing, audited edits, backdating, duplicate prevention, scope corrections, multiple buses, deactivation, unresolved allocations and report/chart/export equality in a disposable database. `smoke_money_workflows.py` also checks historical advance balances and owner-personal settlement reporting. All 31 migrations recreated successfully.

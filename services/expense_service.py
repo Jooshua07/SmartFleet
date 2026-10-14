@@ -1,10 +1,9 @@
-import importlib
 from datetime import date, datetime
 
 from psycopg.rows import dict_row
 
 from database.connection import get_connection
-import services.account_service as account_service
+from services.account_service import get_default_business_payment_account
 from utils.validation import clean_optional_text, clean_required_text, parse_positive_amount
 
 
@@ -65,13 +64,6 @@ def get_active_payment_accounts() -> list[dict]:
                 """
             )
             return cursor.fetchall()
-
-
-def get_default_business_payment_account() -> dict:
-    global account_service
-    if not hasattr(account_service, "get_default_business_payment_account"):
-        account_service = importlib.reload(account_service)
-    return account_service.get_default_business_payment_account()
 
 
 def get_recent_expenses(limit: int = 10) -> list[dict]:

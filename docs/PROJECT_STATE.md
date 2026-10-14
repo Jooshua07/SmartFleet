@@ -2,6 +2,10 @@
 
 Last updated: 2026-10-14
 
+## Step 5 current state
+
+More > Help & Guide is implemented with 28 searchable/category-filtered task guides, financial explanations and supported correction/troubleshooting instructions. Controlled cleanup removed proven-unused entry/UI helpers, consolidated operating calculations/classification and reused ledger rows/connections. Polling file watching fixes the reproduced stale imported-service issue on this machine. The final suite has 98 tests; 17 pages and desktop/mobile browser checks passed. All rows in 39 real tables and before/after financial calculation snapshots remain unchanged. No migrations or daily-use infrastructure were added. See `STEP5_IMPLEMENTATION.md` for evidence and limits.
+
 ## Step 4 current state
 
 Calendar reporting, period-aware consolidated balances, the scheduled cumulative revenue/cost/cash chart, servicing and audited corrections, one-page Reports, CSV/Excel exports and read-only reconciliation are implemented. Migration 031 is applied. All three buses have next servicing 18 October 2026, interval 35 days. Original financial records remain unchanged: K16,200 received, K17,000 paid, K-800 closing cash. The K15,000 historical principal repayment still has no identified loan; this is shown as a warning, not altered. Follow `STEP4_IMPLEMENTATION.md` for the current test/checkpoint evidence and `NEXT_PHASE_GUIDE_AND_CLEANUP.md` for the next phase. Older audit counts below describe the 13 October checkpoint.
@@ -245,8 +249,8 @@ Immediate planned work after the initial app foundation:
 2. Add correction and settlement UI for existing cashing obligations.
 3. Expand Record Cashing with optional import from spreadsheet-style notes.
 4. Add edit flows for salary/advance/loan/owner-money records beyond the guarded salary cancellation workflow.
-5. Build the short in-app user guide specified in `NEXT_PHASE_GUIDE_AND_CLEANUP.md`.
-6. Profile and consolidate report queries during controlled cleanup.
+5. Review the implemented Help & Guide with the business owner.
+6. Continue further cleanup only for independently verified issues; Step 5 query consolidation is complete.
 7. Expand document uploads and employment/assignment management when requested.
 
 ## Blocked or unresolved

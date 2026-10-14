@@ -1,7 +1,6 @@
 import streamlit as st
 
 from components.cards import empty_state
-from services.bus_service import get_buses_overview
 from services.cashing_service import (
     delete_cashing_collection,
     get_cashing_collection,
@@ -21,8 +20,6 @@ from services.smart_cashing_service import (
 )
 from utils.cashing_form import (
     CASHING_FORM_VERSION_KEY,
-    build_direct_cashing_entries,
-    bus_option_label,
     clear_cashing_form_state,
 )
 from utils.dates import today_lusaka
@@ -54,158 +51,10 @@ def _collection_classification(entries: list[dict], unallocated_amount: float) -
     return "MATCHED"
 
 
-def _bus_options(buses: list[dict]) -> dict[str, dict]:
-    return {bus_option_label(bus): bus for bus in buses}
-
-
 def _registration_options(buses: list[dict]) -> dict[str, dict]:
     return {bus["registration_number"]: bus for bus in buses}
 
 
-def _render_amount_fields(
-    selected_buses: list[dict],
-    key_prefix: str,
-    add_sunday: bool,
-    different_amounts: bool,
-) -> tuple[dict[int, float], dict[int, float], dict[int, str]]:
-    normal_amounts = {}
-    sunday_amounts = {}
-    reasons = {}
-    multiple_buses = len(selected_buses) > 1
-
-    if multiple_buses and not different_amounts:
-        amount = st.number_input(
-            "Amount per selected bus (K)",
-            min_value=0.0,
-            value=0.0,
-            step=50.0,
-            key=f"{key_prefix}_common_amount",
-        )
-        sunday_amount = 0.0
-        if add_sunday:
-            sunday_amount = st.number_input(
-                "Sunday amount per selected bus (K)",
-                min_value=0.0,
-                value=0.0,
-                step=50.0,
-                key=f"{key_prefix}_common_sunday",
-            )
-        reason = st.text_input(
-            "Reason if different",
-            placeholder="Optional note for this cashing",
-            key=f"{key_prefix}_common_reason",
-        )
-
-        for bus in selected_buses:
-            normal_amounts[bus["id"]] = amount
-            sunday_amounts[bus["id"]] = sunday_amount
-            reasons[bus["id"]] = reason
-        return normal_amounts, sunday_amounts, reasons
-
-    for bus in selected_buses:
-        with st.container(border=True):
-            st.markdown(f"**{bus['registration_number']}**")
-            st.caption(f"{bus['driver_name'] or 'No assigned driver'} | {bus['route_name']}")
-            normal_amounts[bus["id"]] = st.number_input(
-                "Amount (K)",
-                min_value=0.0,
-                value=0.0,
-                step=50.0,
-                key=f"{key_prefix}_amount_{bus['id']}",
-            )
-            sunday_amounts[bus["id"]] = 0.0
-            if add_sunday:
-                sunday_amounts[bus["id"]] = st.number_input(
-                    "Sunday amount (K)",
-                    min_value=0.0,
-                    value=0.0,
-                    step=50.0,
-                    key=f"{key_prefix}_sunday_{bus['id']}",
-                )
-            reasons[bus["id"]] = st.text_input(
-                "Reason if different",
-                placeholder="Optional note for this bus",
-                key=f"{key_prefix}_reason_{bus['id']}",
-            )
-
-    return normal_amounts, sunday_amounts, reasons
-
-
-def _render_direct_collection_form(today, buses: list[dict], account: dict) -> None:
-    form_version = int(st.session_state.setdefault(CASHING_FORM_VERSION_KEY, 0))
-    key_prefix = f"cash_direct_{form_version}"
-    bus_options = _bus_options(buses)
-
-    with st.container(border=True):
-        collection_date = st.date_input(
-            "Collection date",
-            value=today,
-            format="DD/MM/YYYY",
-            key=f"{key_prefix}_date",
-        )
-        st.caption(
-            f"Paid into {account['name']} ({account['account_type'].replace('_', ' ').title()})"
-        )
-        selected_labels = st.multiselect(
-            "Bus(es)",
-            list(bus_options),
-            placeholder="Choose one or more buses",
-            key=f"{key_prefix}_buses",
-        )
-        selected_buses = [bus_options[label] for label in selected_labels]
-
-        if not selected_buses:
-            st.info("Choose one or more buses to enter cashing.", icon=":material/directions_bus:")
-            return
-
-        add_sunday = st.toggle("Add Sunday", key=f"{key_prefix}_add_sunday")
-        different_amounts = False
-        if len(selected_buses) > 1:
-            different_amounts = st.toggle(
-                "Different amounts per bus",
-                key=f"{key_prefix}_different_amounts",
-            )
-
-        with st.form(f"{key_prefix}_form", border=False, clear_on_submit=True):
-            normal_amounts, sunday_amounts, reasons = _render_amount_fields(
-                selected_buses,
-                key_prefix,
-                add_sunday,
-                different_amounts,
-            )
-            notes = st.text_area(
-                "Collection notes",
-                height=70,
-                key=f"{key_prefix}_notes",
-            )
-            total_preview = sum(normal_amounts.values()) + sum(sunday_amounts.values())
-            st.metric("Total to save", format_whole_kwacha(total_preview), border=True)
-            submitted = st.form_submit_button(
-                "Save cashing",
-                icon=":material/save:",
-                type="primary",
-            )
-
-    if submitted:
-        try:
-            entries = build_direct_cashing_entries(
-                selected_bus_ids=[bus["id"] for bus in selected_buses],
-                normal_amounts=normal_amounts,
-                sunday_amounts=sunday_amounts,
-                reasons=reasons,
-            )
-            record_direct_cashing_collection(
-                collection_date=collection_date,
-                financial_account_id=account["id"],
-                entries=entries,
-                notes=notes,
-            )
-            st.cache_data.clear()
-            clear_cashing_form_state(st.session_state)
-            st.session_state.cashing_saved = True
-            st.rerun()
-        except Exception as exc:
-            st.error(f"Could not record cashing: {exc}", icon=":material/error:")
 
 
 def _render_smart_collection_form(today, account: dict) -> None:

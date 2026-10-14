@@ -110,7 +110,7 @@ def get_reconciliation(end_date: date) -> dict:
     if end_date<baseline:
         raise ValueError('Reconciliation end date must be on or after the reporting baseline.')
     rows=get_period_ledger(baseline,end_date)
-    result=get_period_balance(baseline,end_date)
+    result=get_period_balance(baseline,end_date,ledger=rows)
     grouped=defaultdict(lambda:ZERO)
     for row in rows:
         if row['transaction_type']!='TRANSFER':
@@ -154,10 +154,13 @@ def get_report_warnings(start_date, end_date, report=None):
             AND c.name IN ('Loan Repayments','Driver Advances','Owner Drawings','Driver Salaries') AND f.transaction_type='EXPENSE' ''','A specialized payment is still classified as an ordinary expense.'),
     ]
     warnings=[]
-    for query,message in checks:
-        params=(end_date,start_date) if 'bus_status_history a' in query else (start_date,end_date)
-        if _query(query,params)[0]['count']:
-            warnings.append(message)
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            for query,message in checks:
+                params=(end_date,start_date) if 'bus_status_history a' in query else (start_date,end_date)
+                cursor.execute(query,params)
+                if cursor.fetchone()['count']:
+                    warnings.append(message)
     if report:
         if any(row['unknown_days'] for row in report['buses']):
             warnings.append('Some bus days have no confirmed status history.')

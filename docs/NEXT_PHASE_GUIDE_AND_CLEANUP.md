@@ -1,5 +1,7 @@
 # Next phase: Welcome to SmartFleet and controlled cleanup
 
+Historical specification: Help & Guide and controlled cleanup were completed in Step 5. See `STEP5_IMPLEMENTATION.md`. Optional first-use orientation and contextual links were not requested by the Step 5 task and remain optional future work. No deployment phase began.
+
 ## In-app guide
 
 Add Help to More, with a concise Welcome to SmartFleet introduction, search and task categories: Getting started, Cashing, Costs and servicing, Drivers, Loans/owner money, Reports and corrections. Each answer should take under a minute to read, with three to five numbered actions and a link to the actual page. Optional first-use orientation is dismissible and never blocks recording.

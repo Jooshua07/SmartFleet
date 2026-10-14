@@ -1,5 +1,19 @@
 # SmartFleet module reference
 
+## Step 5 modules
+
+- `utils.help_content.Guide/GUIDES/filter_guides`: 28 task guides, examples and pure filtering.
+- `app_pages/help_guide.py`: More > Help & Guide, searchable native expanders; no DB dependency.
+- `services.financial_rules`: operating-category exclusions, cash payment types and fixed ordinary-expense predicate.
+- `performance_service._load_operating_activity`: one dated source query shared by summaries and series.
+- `finance_service.get_period_balance(..., ledger=None)`: optional ledger reuse, preserving date/baseline cutoffs.
+- `scripts/profile_step5_queries.py`: read-only query/connection counts.
+- `scripts/verify_step5_calculations.py`: before/after financial/report/export comparisons.
+- `scripts/verify_step5_records.py`: read-only whole-database row preservation check.
+- `scripts/smoke_help_ui.py` and `smoke_service_reload.py`: Help/mobile interactions and disposable watcher/export regression.
+
+Removed private direct-entry UI functions and unused metric/list/option wrappers; historical direct-cashing correction services and the tested legacy chart helpers remain supported.
+
 ## Step 4 modules
 
 - `utils.reporting_periods.reporting_period`: calendar month-to-date, 3/6 calendar months and validated custom dates.

@@ -9,7 +9,6 @@ from services.dashboard_service import (
 )
 from services.finance_service import get_business_balance
 from services.performance_service import get_business_financial_timeline
-from services.preset_service import get_reporting_baseline_date
 from services.reminder_service import get_open_reminders
 from services.maintenance_service import get_servicing_schedules, servicing_warning
 from services.validation_service import get_data_validation_warnings
