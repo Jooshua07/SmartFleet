@@ -1,5 +1,13 @@
 # SmartFleet architecture
 
+## Step 4 reporting and servicing
+
+`utils/reporting_periods.py` owns calendar dates. `components/reporting_period.py` owns independent widget keys. Finance shares one period across tabs; Home chart and Reports use separate keys. `finance_service.get_period_balance` carries clean-slate baseline cash forward and excludes internal transfers. `performance_service.get_business_financial_timeline` maps real dated activity to Thursday/Sunday points, with a labelled trailing endpoint when required. Payroll cost is recognized at the first of the earned month; salary cash uses its payment date.
+
+`maintenance_service.record_servicing` atomically saves completion, cost components, one linked bus expense and one ledger payment. Zero-cost work writes maintenance only. Corrections preserve audit snapshots and reuse existing payments. The latest valid completion drives the due date; manual scheduling is audited separately. Migration 031 extends existing tables, without inventory.
+
+`business_report_service` is read-only and reuses operating, cash and Bus Accounts source calculations. Exports use the report snapshot, including collection headers for unresolved allocations. `report_export_service` emits CSV and openpyxl workbooks. General costs remain unassigned. Read-only quality checks never create adjustments.
+
 Last updated: 2026-10-13
 
 ## Current architecture
@@ -298,11 +306,11 @@ Phone-first navigation target:
 2. `services.performance_service` sums gross operating receipts from cashing collections without double-counting remittance rows.
 3. Operating expenses include ordinary operating expenses, bus-specific expenses, salary expense recognized through payroll and eligible financing costs.
 4. Loan principal, owner drawings, owner loans, owner repayments and driver-advance disbursements are excluded from operating expenses.
-5. Net Profit/Loss is calculated as Revenue minus Operating Expenses and can be negative.
-6. Daily and weekly chart controls use independent Streamlit state keys, so they do not change the rest of Home's reporting period.
+5. The chart accumulates recorded revenue and operating costs and shows actual consolidated Business Balance, including financing cash movements.
+6. Month, 3 Months and 6 Months controls use independent keys and calendar periods. A measured-width chart region scrolls horizontally on phones.
 ```
 
-The current app uses hidden `st.navigation` plus a bottom action row rendered with `st.bottom`. This avoids legacy `pages/` auto-discovery and avoids fragile CSS selectors tied to Streamlit internals. Browser/mobile verification is still required before this is considered final.
+The current app uses hidden `st.navigation` plus a bottom action row rendered with `st.bottom`. Step 4 verified the changed screens at mobile and desktop sizes. The chart scroll region uses scoped CSS and requires browser regression checks when Streamlit is upgraded.
 
 ## Configuration and environment
 

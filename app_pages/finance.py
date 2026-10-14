@@ -5,14 +5,11 @@ from components.layout import fixed_page_controls
 from components.reporting_period import period_controls
 from services.dashboard_service import get_financial_summary, get_recent_activity
 from services.finance_service import (
-    get_business_balance,
-    get_business_ledger,
     get_collections,
     get_expenses,
     get_period_balance,
     get_period_ledger,
 )
-from utils.dates import period_bounds
 from utils.formatting import format_date, format_whole_kwacha
 
 

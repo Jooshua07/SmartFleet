@@ -1,5 +1,5 @@
 import unittest
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from services.performance_service import build_financial_timeline
 from utils.dashboard_charts import build_financial_chart, build_financial_chart_data
@@ -26,3 +26,9 @@ class FinancialTimelineTest(unittest.TestCase):
         self.assertEqual(set(data.Type), {'Total Revenue', 'Total Expenses', 'Business Balance'})
         self.assertNotIn('domain', spec['layer'][1]['encoding']['y']['scale'])
         self.assertEqual(spec['layer'][1]['encoding']['tooltip'][-1]['format'], ',.2f')
+
+    def test_six_month_chart_retains_point_spacing(self):
+        series=build_financial_timeline(date(2026,10,1),date(2027,3,31),[],[],Decimal('0'))
+        spec=build_financial_chart(build_financial_chart_data(series)).to_dict()
+        self.assertGreater(len(series),50)
+        self.assertGreater(spec['width'],4000)

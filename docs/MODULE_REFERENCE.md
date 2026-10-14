@@ -1,5 +1,21 @@
 # SmartFleet module reference
 
+## Step 4 modules
+
+- `utils.reporting_periods.reporting_period`: calendar month-to-date, 3/6 calendar months and validated custom dates.
+- `scheduled_chart_dates`: Thursday/Sunday axis dates, without creating transactions.
+- `components.reporting_period.period_controls`: reusable independent state.
+- `finance_service.get_period_balance/get_period_ledger/summarize_ledger`: chronological, transfer-neutral consolidated cash.
+- `performance_service.get_business_financial_timeline/build_financial_timeline`: cumulative operating series and actual cash balance, with trailing endpoint.
+- `dashboard_charts.build_financial_chart_data/build_financial_chart`: three lines, adaptive scale, zero reference and hover data.
+- `maintenance_service`: schedules, warning thresholds, atomic paid/zero-cost completion and audited historical corrections.
+- `components.servicing_form`: shared bus-specific and More entry form; `app_pages/record_servicing.py` includes history/correction.
+- `business_report_service`: period report, historical status days, ledger reconciliation and quality checks.
+- `report_export_service`: five CSV/Excel summaries; workbook formats dates/money and keeps user text literal.
+- `scripts/smoke_step4.py`, `smoke_step4_pages.py`, `smoke_step4_ui.py`, `verify_step4_backup.py`, `verify_step4_live.py`: disposable financial scenarios, read-only UI, restore and preservation evidence.
+
+The older business-performance helpers below remain for existing callers/tests; Home now uses the new financial timeline.
+
 Last updated: 2026-10-13
 
 This reference covers significant code functions that exist today, plus the installed PostgreSQL integrity functions that application services must respect. It should be updated after every implementation phase.
@@ -1288,5 +1304,3 @@ The following modules are planned but do not exist yet:
 - `database/transactions.py`
 - `database/repositories.py` or table-specific data-access modules
 - `services/assignment_service.py`
-- `services/maintenance_service.py`
-- Streamlit browser/mobile verification tests

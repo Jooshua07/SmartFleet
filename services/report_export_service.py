@@ -30,9 +30,12 @@ def report_export_tables(report: dict) -> dict[str, list[dict]]:
         for row in report['buses']]
     driver=[]
     for row in report['salaries']:
+        earned=report['start']<=row['payroll_month']<=report['end']
+        paid=row['status']=='PAID' and report['start']<=row['payment_date']<=report['end']
         driver.append({'Driver':row['driver'],'Record':'Salary','Payroll month':row['payroll_month'],
-            'Payment date':row['payment_date'],'Earned cost (K)':row['salary_cost'],
-            'Net salary (K)':row['net_salary'],'Advance recovered (K)':row['advance_recovery']})
+            'Payment date':row['payment_date'],'Earned cost (K)':row['salary_cost'] if earned else Decimal('0'),
+            'Net salary paid (K)':row['net_salary'] if paid else Decimal('0'),
+            'Advance recovered (K)':row['advance_recovery'] if paid else Decimal('0')})
     for row in report['advances']:
         driver.append({'Driver':row['driver'],'Record':'Advance','Advance date':row['advance_date'],
             'Advance given (K)':row['amount'] if report['start']<=row['advance_date']<=report['end'] else Decimal('0'),

@@ -13,7 +13,6 @@ from services.preset_service import get_reporting_baseline_date
 from services.reminder_service import get_open_reminders
 from services.maintenance_service import get_servicing_schedules, servicing_warning
 from services.validation_service import get_data_validation_warnings
-from utils.dashboard_charts import build_business_performance_chart, build_business_performance_chart_data
 from utils.dashboard_charts import build_financial_chart, build_financial_chart_data
 from utils.dates import subtract_months, today_lusaka
 from utils.formatting import format_date, format_whole_kwacha
@@ -78,39 +77,6 @@ def _load_performance_series(start_date, end_date, grouping):
     return get_business_financial_timeline(start_date, end_date)
 
 
-def _chart_bounds():
-    today = today_lusaka()
-    baseline = get_reporting_baseline_date()
-    mode = st.segmented_control(
-        "Business performance period",
-        ["Daily", "Weekly", "Date Range"],
-        default="Daily",
-        key="home_business_performance_period",
-    )
-    if mode == "Date Range":
-        start = st.date_input(
-            "Chart start",
-            value=baseline,
-            min_value=baseline,
-            max_value=today,
-            format="DD/MM/YYYY",
-            key="home_business_chart_start",
-        )
-        end = st.date_input(
-            "Chart end",
-            value=today,
-            min_value=baseline,
-            max_value=today,
-            format="DD/MM/YYYY",
-            key="home_business_chart_end",
-        )
-        if start > end:
-            st.error("Chart start date must be before chart end date.", icon=":material/error:")
-            st.stop()
-        return start, end, "Daily"
-    return baseline, today, mode
-
-
 start_date, end_date = _selected_period_bounds()
 st.caption(f"{format_date(start_date)} to {format_date(end_date)}")
 
@@ -170,7 +136,9 @@ with st.container():
             ":material/monitoring:",
         )
     else:
-        st.html('<style>.st-key-home_financial_chart {overflow-x:auto; max-width:100%;}</style>')
+        chart_width = max(560, chart_data['Date'].nunique() * 80 + 80)
+        st.html(f'<style>.st-key-home_financial_chart {{overflow-x:auto; max-width:100%;}} '
+                f'.st-key-home_financial_chart [data-testid="stElementContainer"] {{min-width:{chart_width}px; width:{chart_width}px;}}</style>')
         with st.container(key='home_financial_chart'):
             st.altair_chart(build_financial_chart(chart_data), width='content',
                 alt='Cumulative cashing, operating costs and actual business balance at Thursday and Sunday dates')

@@ -87,6 +87,28 @@ def main():
         assert len(workbook.sheetnames)==5
         assert get_reconciliation(date(2026,10,31))['closing_balance']==-700
         print('Exports: five Excel sheets open; category totals match screen; ledger reconciliation PASS')
+        from services.smart_cashing_service import record_smart_cashing_collection
+        from services.account_service import get_default_business_payment_account
+        account=get_default_business_payment_account()['id']
+        def entry(bus_id,amount):
+            return dict(bus_id=bus_id,normal_days=1,normal_daily_rate=600,sunday_days=0,sunday_rate=300,
+                expected_amount=600,actual_amount=amount,explanation='Historical entry',notes=None)
+        record_smart_cashing_collection(date(2026,10,4),account,600,[entry(bus['id'],600)])
+        record_smart_cashing_collection(date(2026,10,8),account,1200,[entry(bus['id'],600),entry(second['id'],600)])
+        set_bus_status(second['id'],'INACTIVE',date(2026,10,9),'In garage')
+        one_week=get_business_report(date(2026,10,1),date(2026,10,7))
+        assert one_week['operating']['revenue']==600
+        report=get_business_report(date(2026,10,1),date(2026,10,14))
+        assert report['operating']['revenue']==1800
+        second_report=next(row for row in report['buses'] if row['bus_id']==second['id'])
+        assert second_report['deactivated_days']==6
+        tables=report_export_tables(report)
+        assert sum(row['Recorded cashing (K)'] for row in tables['Daily Cashing Summary'])==1800
+        record_smart_cashing_collection(date(2026,10,11),account,700,[entry(bus['id'],600)],100,'SURPLUS')
+        report=get_business_report(date(2026,10,1),date(2026,10,14))
+        assert any('allocation' in warning for warning in report['warnings'])
+        assert get_business_financial_timeline(date(2026,10,1),date(2026,10,14))[-1]['business_balance']==report['balance']['closing_balance']
+        print('One-week, multiple-bus collections, deactivation days, unresolved allocation, CSV source and graph totals PASS')
     finally:
         with psycopg.connect(**kwargs,dbname='postgres',autocommit=True) as conn:
             conn.execute(sql.SQL('DROP DATABASE {} WITH (FORCE)').format(sql.Identifier(name)))

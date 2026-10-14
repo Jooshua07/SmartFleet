@@ -2,6 +2,10 @@
 
 Last updated: 2026-10-13
 
+## Step 4 extension rules
+
+Reuse `reporting_period` for calendar dates and a distinct key prefix for every independent selector. Never reset cash when a reporting period changes. Reuse source financial services for both reports and exports; do not sum linked maintenance again. Servicing completion and payment must be one transaction, with actual dates, zero-cost support and a latest-valid-event schedule. Specialized payment corrections belong to their own workflow. Add write scenarios to disposable smoke scripts; browser checks against the live app are read-only. See `NEXT_PHASE_GUIDE_AND_CLEANUP.md` before starting the next phase.
+
 Use this guide when adding or changing SmartFleet behavior. The goal is to extend the system without breaking financial integrity or rewriting the project.
 
 ## 1. Identify the requirement

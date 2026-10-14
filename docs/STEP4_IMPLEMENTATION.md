@@ -35,3 +35,18 @@ Reports is a single scrollable page with overview, each bus, operating categorie
 ## Stage 6
 
 Five period-aware CSV/Excel summaries and a complete five-sheet workbook. Excel numeric/date round trips passed, including K4,000.25 and negative K800; formula-like user text stays text. Reconciliation uses baseline-to-end ledger totals only. Quality checks flag unresolved allocations/loans, payment links, recovery mismatches, servicing linkage, status overlaps and total disagreements; General expenses are valid. Disposable report/export tests reconcile category costs and cash totals without changing live records.
+
+## Stage 7
+
+- Full suite: 93 tests passed, 17.273 seconds, using a writable Windows temp directory.
+- 31 migrations recreated in a disposable PostgreSQL DB.
+- Smart Cashing, expense/finance, money workflows and expanded Step 4 smoke scripts passed.
+- Money reporting scenarios include salary cost once, net pay after recovery, historical advance outstanding, personal owner settlement excluded from cash and owner liability.
+- Step 4 scenarios include one week, mixed multi-bus receipts, deactivation days, unresolved allocation warnings and report/chart/export equality.
+- All 16 pages rendered in read-only AppTest. Finance shared dates persist across tabs, historical closing balance matches its end date, reversed custom dates show errors, and Home chart controls stay independent.
+- Browser checks: Home, Buses, Finance, Record Expense, Record Servicing and Reports passed at 390x844 and 1440x1000, without page-wide horizontal overflow. The chart region measures 560px wide inside a 358px phone content area and scrolls independently. Six-month chart sizing is also tested with more than 50 points.
+- Compile checks and Git whitespace checks passed.
+- Original live financial and maintenance event rows match the pre-change snapshot; only requested servicing schedules and the additive migration were applied.
+- Live closing cash remains K-800, calculated from K16,200 in minus K17,000 out. The unresolved K15,000 loan remains unchanged and flagged.
+
+The running Streamlit server needed a restart to pick up imported service changes; a browser refresh alone was insufficient. The final app is served locally on port 8501.

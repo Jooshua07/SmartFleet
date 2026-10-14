@@ -107,7 +107,7 @@ def build_financial_chart_data(series: list[dict]) -> pd.DataFrame:
 
 
 def build_financial_chart(data: pd.DataFrame) -> alt.LayerChart:
-    width = max(360, data['Date'].nunique() * 80)
+    width = max(480, data['Date'].nunique() * 80)
     lines = alt.Chart(data).mark_line(point=True, strokeWidth=2).encode(
         x=alt.X('Period:O', sort=list(dict.fromkeys(data['Period'])), title=None,
                 axis=alt.Axis(labelAngle=-35, labelLimit=130)),

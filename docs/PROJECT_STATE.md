@@ -1,6 +1,10 @@
 # SmartFleet project state
 
-Last updated: 2026-10-13
+Last updated: 2026-10-14
+
+## Step 4 current state
+
+Calendar reporting, period-aware consolidated balances, the scheduled cumulative revenue/cost/cash chart, servicing and audited corrections, one-page Reports, CSV/Excel exports and read-only reconciliation are implemented. Migration 031 is applied. All three buses have next servicing 18 October 2026, interval 35 days. Original financial records remain unchanged: K16,200 received, K17,000 paid, K-800 closing cash. The K15,000 historical principal repayment still has no identified loan; this is shown as a warning, not altered. Follow `STEP4_IMPLEMENTATION.md` for the current test/checkpoint evidence and `NEXT_PHASE_GUIDE_AND_CLEANUP.md` for the next phase. Older audit counts below describe the 13 October checkpoint.
 Audit context: local development project, Africa/Lusaka business date context.
 
 ## Purpose
@@ -241,26 +245,26 @@ Immediate planned work after the initial app foundation:
 2. Add correction and settlement UI for existing cashing obligations.
 3. Expand Record Cashing with optional import from spreadsheet-style notes.
 4. Add edit flows for salary/advance/loan/owner-money records beyond the guarded salary cancellation workflow.
-5. Implement maintenance scheduling and reminders.
-6. Add isolated database integration tests for data-changing workflows.
-7. Add browser/mobile verification for bottom navigation and narrow viewport behavior.
+5. Build the short in-app user guide specified in `NEXT_PHASE_GUIDE_AND_CLEANUP.md`.
+6. Profile and consolidate report queries during controlled cleanup.
+7. Expand document uploads and employment/assignment management when requested.
 
 ## Blocked or unresolved
 
 | Area | Blocker |
 | --- | --- |
-| Isolated database integration suite | Routine data-changing tests need a dedicated test database. |
+| Isolated database integration suite | Disposable databases now cover cashing, expenses, servicing, payroll, loans, owner money and reporting. |
 | Legacy pages folder | `pages/` exists but is empty. The app now uses explicit `st.navigation`, which causes Streamlit to ignore the legacy folder. |
 | Bus document uploads | Bus document metadata and expiry dates are stored, but uploaded file persistence is not designed yet. |
-| `In Garage` bus status | `buses.status` allows only `ACTIVE` and `INACTIVE`. Garage state must come from maintenance/downtime rules or an approved new operational-status model. |
+| Garage downtime | Use Deactivated with an explanatory reason; the obsolete In Garage filter is removed. |
 | Recent Activity | No audit-log table exists. Initial activity can only be derived carefully from real domain records, not manufactured from unrelated timestamps. |
 | Stored document reminders | The Reminders page can derive document expiry alerts from `bus_documents`; creating/dismissing stored reminder rows from those dates is still planned. |
 | Authentication and authorization | Not implemented. Public deployment is not safe until this is designed and enforced server-side. |
-| UI verification | Headless Streamlit checks passed. Browser/mobile viewport verification is still pending. |
+| UI verification | Step 4 browser checks passed at 390px and 1440px for the six changed screens, including horizontal chart scrolling. |
 
 ## Known architectural risks
 
-- Current tests cover key unit/page cases, but data-changing integration coverage still needs an isolated database.
+- Data-changing integration tests create and drop isolated databases; never run their fixture writes on live records.
 - Services use direct connections and simple transaction scopes. A dedicated transaction helper is still planned.
 - There is no repository/data-access layer beyond service-level SQL functions.
 - Financial operations must be implemented as atomic multi-table transactions. Writing one table at a time from UI handlers would bypass the intended integrity model.

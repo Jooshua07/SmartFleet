@@ -60,6 +60,10 @@ def _refresh_schedule(cursor, bus_id):
         WHERE bus_id=%s AND is_servicing AND status='COMPLETED' ''', (bus_id,))
     latest = cursor.fetchone()['latest']
     if latest:
+        cursor.execute("SELECT last_completed_date FROM maintenance_schedules WHERE bus_id=%s AND schedule_name='Servicing'", (bus_id,))
+        previous=cursor.fetchone()
+        if previous and previous['last_completed_date']==latest:
+            return
         cursor.execute('''INSERT INTO maintenance_schedules(bus_id,schedule_name,interval_days,last_completed_date,next_due_date)
             VALUES (%s,'Servicing',35,%s,%s) ON CONFLICT(bus_id,schedule_name)
             DO UPDATE SET last_completed_date=EXCLUDED.last_completed_date,

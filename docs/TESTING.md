@@ -1,6 +1,14 @@
 # SmartFleet testing guide
 
-Last updated: 2026-10-13
+Last updated: 2026-10-14
+
+## Step 4 verification
+
+Baseline 77 tests passed; final suite 93 passed. New tests cover calendar/year boundaries, transfer exclusion, carry-forward, cumulative Thursday/Sunday dates, trailing expenses, negative/large balances, servicing thresholds, form submission/reset/errors and CSV/Excel round trips. `smoke_step4.py` tests paid and zero-cost servicing, audited edits, backdating, duplicate prevention, scope corrections, multiple buses, deactivation, unresolved allocations and report/chart/export equality in a disposable database. `smoke_money_workflows.py` also checks historical advance balances and owner-personal settlement reporting. All 31 migrations recreated successfully.
+
+`smoke_step4_pages.py` reads all 16 pages and exercises Finance tab persistence, historical cutoff, invalid dates and independent Home controls. `smoke_step4_ui.py` uses Playwright/Chrome at 390x844 and 1440x1000; screenshots are kept locally under ignored `backups/step4-ui`. It never submits live forms. `verify_step4_backup.py` restores a real backup into a disposable DB; `verify_step4_live.py` compares original live financial rows after implementation. Test records never enter the live DB.
+
+For Windows test cleanup, use a writable local temporary folder under `backups/runtime-temp`. Playwright is a development-only installed tool; openpyxl is a runtime requirement. Older command results below are historical audit evidence.
 
 ## Current testing state
 
@@ -8,7 +16,7 @@ The repository now has a reliable `unittest` baseline plus focused Streamlit App
 
 Current blockers:
 
-- Data-changing database tests still need an isolated test database.
+- Data-changing smoke tests use disposable PostgreSQL databases.
 - `pytest` is not installed in `.venv`; use `python -m unittest discover -v` for the current suite.
 - Route creation and other write-heavy checks should remain out of the routine suite until test-database fixtures exist.
 

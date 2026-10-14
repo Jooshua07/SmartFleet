@@ -117,6 +117,20 @@ def main() -> None:
         summary = get_operating_summary(date(2026, 10, 1), date(2026, 10, 31))
         if summary["expenses"] != 2500:
             raise RuntimeError(f"Operating expenses should count salary once as K2,500, got {summary['expenses']}")
+        from services.business_report_service import get_business_report, get_reconciliation
+        from services.report_export_service import report_export_tables
+        report=get_business_report(date(2026,10,1),date(2026,10,31))
+        assert report['operating']['salary_costs']==2500
+        assert report['owner_balance']==8000
+        assert sum(row['amount'] for row in report['repayments'] if row['payment_source']=='OWNER_PERSONAL')==10000
+        tables=report_export_tables(report)
+        salaries=[row for row in tables['Driver Salary and Advance Summary'] if row['Record']=='Salary']
+        assert salaries[0]['Net salary paid (K)']==1500
+        assert salaries[0]['Advance recovered (K)']==1000
+        historical=get_business_report(date(2026,10,1),date(2026,10,10))
+        assert historical['advances'][0]['outstanding']==1000
+        assert get_reconciliation(date(2026,10,31))['closing_balance']==get_business_balance()['business_balance']
+        print('Reporting payroll/owner scenarios passed: expense once, external settlement excluded, owner liability, recovery and historical advances.')
 
         extra_advance = record_driver_advance(employment["employment_id"], date(2026, 10, 9), 500, "Mistaken advance")
         cancel_driver_advance(extra_advance["id"], "Smoke correction")

@@ -9,6 +9,7 @@ from services.reminder_service import (
 )
 from utils.dates import today_lusaka
 from utils.formatting import format_date
+from services.maintenance_service import servicing_warning
 
 
 today = today_lusaka()
@@ -20,6 +21,11 @@ if maintenance:
         with st.container(border=True):
             st.markdown(f"**{item['registration_number']}**")
             st.caption(f"{item['schedule_name']} due {format_date(item['next_due_date'])}")
+            level=servicing_warning(item['next_due_date'],today)
+            if level in ('Urgent','Overdue'):
+                st.error(level)
+            elif level=='Warning':
+                st.warning('Due within two weeks')
 else:
     st.caption("No maintenance due in the next 21 days.")
 
