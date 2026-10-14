@@ -17,6 +17,7 @@ from utils.formatting import format_date, format_whole_kwacha
 def _load_finance_general(start_date, end_date):
     return {
         "summary": get_financial_summary(start_date, end_date),
+        "cash": get_period_balance(start_date, end_date),
         "activity": get_recent_activity(limit=8),
     }
 
@@ -54,12 +55,13 @@ st.caption(f"{format_date(start_date)} to {format_date(end_date)}")
 if selected_section == "General":
     finance_data = _load_finance_general(start_date, end_date)
     summary = finance_data["summary"]
+    cash = finance_data['cash']
     with st.container(horizontal=True):
         st.metric("Collections", format_whole_kwacha(summary["revenue"]), border=True)
         st.metric("Operating Costs", format_whole_kwacha(summary["expenses"]), border=True)
-        st.metric("Other Payments", format_whole_kwacha(get_period_balance(start_date, end_date)['other_payments']), border=True)
+        st.metric("Other Payments", format_whole_kwacha(cash['other_payments']), border=True)
     with st.expander('Other payments breakdown'):
-        for kind, amount in get_period_balance(start_date, end_date)['other_payment_breakdown'].items():
+        for kind, amount in cash['other_payment_breakdown'].items():
             st.write(f"{kind.replace('_', ' ').title()}: {format_whole_kwacha(amount)}")
     st.caption("Recorded operating costs exclude loan principal repayments, owner drawings and recoverable advances.")
 
