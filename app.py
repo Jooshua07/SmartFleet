@@ -11,6 +11,7 @@ st.set_page_config(
 
 
 PAGES = [
+    st.Page('app_pages/help_guide.py', title='Help & Guide', icon=':material/help:', visibility='hidden'),
     st.Page('app_pages/record_servicing.py', title='Record Servicing', icon=':material/build:', visibility='hidden'),
     st.Page("app_pages/home.py", title="Home", icon=":material/home:", default=True),
     st.Page("app_pages/buses.py", title="Buses", icon=":material/directions_bus:"),

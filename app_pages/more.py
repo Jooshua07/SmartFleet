@@ -19,6 +19,7 @@ quick_action("Reports", "app_pages/reports.py", ":material/download:")
 quick_action("Backups", "app_pages/backups.py", ":material/backup:")
 
 st.subheader("Management")
+quick_action('Help & Guide', 'app_pages/help_guide.py', ':material/help:')
 quick_action("Bus Accounts", "app_pages/accounts.py", ":material/account_balance:")
 quick_action("Business Presets", "app_pages/business_presets.py", ":material/tune:")
 quick_action("Driver Money", "app_pages/driver_money.py", ":material/id_card:")
