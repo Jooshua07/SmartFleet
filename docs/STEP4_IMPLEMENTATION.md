@@ -23,3 +23,7 @@ Scheduled cumulative chart uses Thursday/Sunday points and adds a labelled perio
 ## Stage 3
 
 Migration 031 extends existing maintenance records with transport, servicing flag and actual payment date. Other costs use the existing parts_cost field; no inventory workflow. All three real buses had no prior maintenance and were safely scheduled for 18 October 2026. Completion, linked operating expense and ledger payment save atomically. Zero-cost completions have no expense/payment. Audited corrections reuse the payment, and latest completion controls the due date. Threshold tests and disposable PostgreSQL scenarios passed, including duplicates, backdating, zero cost and corrections. Record Servicing is reachable from More and each bus.
+
+## Stage 4
+
+Finance shows Collections, Operating Costs and Other Payments, with a separate non-operating breakdown and five period-aware balance metrics. Historical expenses reuse their existing ledger payment; changing scope clears obsolete allocation rows. Existing specialized and maintenance-linked payments are guarded against ordinary editing/deletion. Older expenses can be selected from expanded history. Expense service/page tests and disposable scope-change scenarios passed.

@@ -309,10 +309,13 @@ def update_business_expense(
         with conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 """
-                SELECT financial_transaction_id, payment_source, description
-                FROM expenses
-                WHERE id = %s
-                FOR UPDATE;
+                SELECT e.financial_transaction_id, e.payment_source, e.description,
+                       ec.name AS category_name, ft.transaction_type,
+                       EXISTS(SELECT 1 FROM maintenance m WHERE m.expense_id=e.id) AS maintenance_linked
+                FROM expenses e JOIN expense_categories ec ON ec.id=e.category_id
+                LEFT JOIN financial_transactions ft ON ft.id=e.financial_transaction_id
+                WHERE e.id = %s
+                FOR UPDATE OF e;
                 """,
                 (expense_id,),
             )
@@ -321,6 +324,10 @@ def update_business_expense(
                 raise ValueError("Expense not found.")
             if existing["payment_source"] != "BUSINESS_ACCOUNT":
                 raise ValueError("Only business-account expenses can be edited here.")
+            if existing.get('maintenance_linked'):
+                raise ValueError('Correct this payment in Record Servicing to keep maintenance history consistent.')
+            if is_restricted_expense_category(existing.get('category_name')) or existing.get('transaction_type') not in (None,'EXPENSE','TRANSFER_FEE','OTHER'):
+                raise ValueError('Use the loan, payroll or owner-money workflow to correct this specialized payment.')
             description = _clean_expense_title(description, existing["description"])
 
             _load_expense_category(cursor, category_id)
@@ -397,7 +404,9 @@ def update_business_expense(
                     expense_id,
                 ),
             )
-            return cursor.fetchone()
+            result = cursor.fetchone()
+            cursor.execute('DELETE FROM expense_allocations WHERE expense_id=%s', (expense_id,))
+            return result
 
 
 def delete_business_expense(expense_id: int) -> None:
@@ -405,10 +414,11 @@ def delete_business_expense(expense_id: int) -> None:
         with conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
                 """
-                SELECT financial_transaction_id, payment_source
-                FROM expenses
-                WHERE id = %s
-                FOR UPDATE;
+                SELECT e.financial_transaction_id, e.payment_source, ec.name AS category_name, ft.transaction_type
+                FROM expenses e JOIN expense_categories ec ON ec.id=e.category_id
+                LEFT JOIN financial_transactions ft ON ft.id=e.financial_transaction_id
+                WHERE e.id = %s
+                FOR UPDATE OF e;
                 """,
                 (expense_id,),
             )
@@ -417,6 +427,8 @@ def delete_business_expense(expense_id: int) -> None:
                 raise ValueError("Expense not found.")
             if existing["payment_source"] != "BUSINESS_ACCOUNT":
                 raise ValueError("Only business-account expenses can be deleted here.")
+            if is_restricted_expense_category(existing.get('category_name')) or existing.get('transaction_type') not in (None,'EXPENSE','TRANSFER_FEE','OTHER'):
+                raise ValueError('Use the specialized money workflow to correct this payment.')
 
             cursor.execute(
                 """

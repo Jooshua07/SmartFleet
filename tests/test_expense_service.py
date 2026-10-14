@@ -46,6 +46,14 @@ class FakeConnection:
 
 
 class ExpenseServiceValidationTests(unittest.TestCase):
+    def test_specialized_existing_payment_cannot_be_recategorized(self):
+        for extra in ({'category_name':'Owner Drawings','transaction_type':'OWNER_DRAWING'}, {'maintenance_linked':True}):
+            row={'financial_transaction_id':44,'payment_source':'BUSINESS_ACCOUNT','description':'Old payment',**extra}
+            cursor=FakeCursor([row])
+            with patch('services.expense_service.get_connection',return_value=FakeConnection(cursor)), self.assertRaises(ValueError):
+                update_business_expense(1,date(2026,10,1),2,100,'Changed title',financial_account_id=9)
+            self.assertFalse(any('UPDATE financial_transactions' in call[0] for call in cursor.executed))
+
     def test_record_expense_requires_positive_amount(self):
         with self.assertRaisesRegex(ValueError, "Amount must be greater than zero"):
             record_business_expense(

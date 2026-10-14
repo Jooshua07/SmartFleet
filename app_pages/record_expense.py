@@ -211,7 +211,9 @@ else:
     else:
         _render_expense_form(categories, buses, today)
 
-recent = get_recent_expenses(limit=10)
+with st.expander('Find older expenses'):
+    history_limit = st.selectbox('Show latest', [10, 50, 200, 1000], key='expense_history_limit')
+recent = get_recent_expenses(limit=history_limit)
 if recent:
     st.subheader("Recent expenses")
     for expense in recent:
