@@ -1,17 +1,19 @@
 import streamlit as st
 
 from components.cards import empty_state
+from components.reporting_period import period_controls
 from services.dashboard_service import (
     get_activity_date_bounds,
     get_bus_status_counts,
     get_recent_activity,
 )
 from services.finance_service import get_business_balance
-from services.performance_service import get_business_performance_series
+from services.performance_service import get_business_financial_timeline
 from services.preset_service import get_reporting_baseline_date
 from services.reminder_service import get_open_reminders
 from services.validation_service import get_data_validation_warnings
 from utils.dashboard_charts import build_business_performance_chart, build_business_performance_chart_data
+from utils.dashboard_charts import build_financial_chart, build_financial_chart_data
 from utils.dates import subtract_months, today_lusaka
 from utils.formatting import format_date, format_whole_kwacha
 
@@ -72,7 +74,7 @@ def _selected_period_bounds():
 
 @st.cache_data(ttl=30, max_entries=32, show_spinner=False)
 def _load_performance_series(start_date, end_date, grouping):
-    return get_business_performance_series(start_date, end_date, grouping)
+    return get_business_financial_timeline(start_date, end_date)
 
 
 def _chart_bounds():
@@ -154,23 +156,23 @@ with st.container(border=True):
     else:
         st.write(f"{counts['ACTIVE']} buses active | {counts['INACTIVE']} buses deactivated")
 
-with st.container(border=True):
+with st.container():
     st.subheader("Business Performance")
-    chart_start, chart_end, chart_grouping = _chart_bounds()
+    chart_start, chart_end = period_controls('home_chart', ('Month', '3 Months', '6 Months'), 'Chart period')
     st.caption(f"{format_date(chart_start)} to {format_date(chart_end)}")
-    series = _load_performance_series(chart_start, chart_end, chart_grouping)
-    chart_data = build_business_performance_chart_data(series)
-    if chart_data.empty or chart_data["Amount"].abs().sum() == 0:
+    series = _load_performance_series(chart_start, chart_end, 'Scheduled')
+    chart_data = build_financial_chart_data(series)
+    if chart_data.empty:
         empty_state(
             "No performance records yet",
             "Record cashing, expenses or payroll to populate this chart.",
             ":material/monitoring:",
         )
     else:
-        st.altair_chart(
-            build_business_performance_chart(chart_data),
-            alt="Recorded revenue, operating expenses and operating profit or loss over time",
-        )
+        st.html('<style>.st-key-home_financial_chart {overflow-x:auto; max-width:100%;}</style>')
+        with st.container(key='home_financial_chart'):
+            st.altair_chart(build_financial_chart(chart_data), width='content',
+                alt='Cumulative cashing, operating costs and actual business balance at Thursday and Sunday dates')
 
 with st.container(border=True):
     with st.container(horizontal=True, horizontal_alignment="distribute"):

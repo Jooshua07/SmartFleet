@@ -15,3 +15,7 @@
 ## Financial definitions
 
 Operating revenue is recorded cashing, not financing. Operating costs recognize ordinary expenses and earned payroll once. Salaries are recognized on the first day of their payroll month, matching existing performance and Bus Accounts calculations; actual payments stay on their payment dates. Principal payments, drawings and advances are separate cash movements. Historical closing balances use the selected end date.
+
+## Stage 2
+
+Scheduled cumulative chart uses Thursday/Sunday points and adds a labelled period-end point for trailing activity. Transaction dates remain unchanged. Revenue excludes financing, costs exclude principal/drawings/advances, and cash balance uses the ledger. Separate Month/3 Months/6 Months chart controls. Seven focused chart/performance tests passed; mobile browser verification follows during regression.

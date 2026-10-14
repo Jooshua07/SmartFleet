@@ -7,6 +7,48 @@ from psycopg.rows import dict_row
 
 from database.connection import get_connection
 from services.preset_service import get_reporting_baseline_date
+from services.finance_service import get_period_balance, get_period_ledger
+from utils.reporting_periods import scheduled_chart_dates
+
+
+def build_financial_timeline(start_date, end_date, daily, ledger, opening):
+    from bisect import bisect_left
+    dates = scheduled_chart_dates(start_date, end_date)
+    activity_dates = {row['transaction_date'] for row in ledger}
+    activity_dates.update(row['period_start'] for row in daily if row['revenue'] or row['operating_expenses'])
+    if not dates or any(day > dates[-1] for day in activity_dates):
+        dates.append(end_date)
+    buckets = {day: dict(period_start=day, period_end=day, revenue=Decimal('0'),
+                         operating_expenses=Decimal('0'), business_balance=Decimal('0'),
+                         period_end_point=day.weekday() not in (3, 6)) for day in dates}
+    for row in daily:
+        index = bisect_left(dates, row['period_start'])
+        if index < len(dates):
+            bucket = buckets[dates[index]]
+            bucket['revenue'] += row['revenue']
+            bucket['operating_expenses'] += row['operating_expenses']
+    for row in ledger:
+        if row['transaction_type'] == 'TRANSFER':
+            continue
+        bucket = buckets[dates[bisect_left(dates, row['transaction_date'])]]
+        bucket['business_balance'] += row['amount'] if row['direction'] == 'IN' else -row['amount']
+    revenue = costs = Decimal('0')
+    balance = opening
+    for bucket in buckets.values():
+        revenue += bucket['revenue']
+        costs += bucket['operating_expenses']
+        balance += bucket['business_balance']
+        bucket.update(revenue=revenue, operating_expenses=costs, business_balance=balance)
+    return list(buckets.values())
+
+
+def get_business_financial_timeline(start_date: date, end_date: date) -> list[dict]:
+    start_date = max(start_date, get_reporting_baseline_date())
+    if start_date > end_date:
+        return []
+    return build_financial_timeline(start_date, end_date,
+        get_business_performance_series(start_date, end_date),
+        get_period_ledger(start_date, end_date), get_period_balance(start_date, end_date)['opening_balance'])
 
 
 EXCLUDED_OPERATING_EXPENSE_CATEGORIES = {

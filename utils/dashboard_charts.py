@@ -96,6 +96,33 @@ def build_business_performance_chart_data(series: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["Date", "Period", "Type", "Amount"])
 
 
+def build_financial_chart_data(series: list[dict]) -> pd.DataFrame:
+    return pd.DataFrame([
+        {'Date': item['period_start'],
+         'Period': item['period_start'].strftime('%a %d %b %Y') + (' (period end)' if item['period_end_point'] else ''),
+         'Type': label, 'Amount': _to_float(item[field])}
+        for item in series for label, field in [('Total Revenue', 'revenue'),
+            ('Total Expenses', 'operating_expenses'), ('Business Balance', 'business_balance')]
+    ], columns=['Date', 'Period', 'Type', 'Amount'])
+
+
+def build_financial_chart(data: pd.DataFrame) -> alt.LayerChart:
+    width = max(360, data['Date'].nunique() * 80)
+    lines = alt.Chart(data).mark_line(point=True, strokeWidth=2).encode(
+        x=alt.X('Period:O', sort=list(dict.fromkeys(data['Period'])), title=None,
+                axis=alt.Axis(labelAngle=-35, labelLimit=130)),
+        y=alt.Y('Amount:Q', title='K', scale=alt.Scale(zero=True, nice=True),
+                axis=alt.Axis(format=',.0f', tickCount=6)),
+        color=alt.Color('Type:N', title=None,
+            scale=alt.Scale(domain=['Total Revenue', 'Total Expenses', 'Business Balance'],
+                            range=['#2563eb', '#dc2626', '#16a34a']),
+            legend=alt.Legend(orient='top', columns=3, labelFontSize=10)),
+        tooltip=[alt.Tooltip('Period:N', title='Date'), alt.Tooltip('Type:N', title=''),
+                 alt.Tooltip('Amount:Q', title='Amount (K)', format=',.2f')])
+    zero = alt.Chart(pd.DataFrame({'Amount': [0]})).mark_rule(color='#6b7280', strokeDash=[4,4]).encode(y='Amount:Q')
+    return (zero + lines).properties(width=width, height=280)
+
+
 def build_business_performance_chart(chart_data: pd.DataFrame) -> alt.LayerChart:
     if chart_data.empty:
         return alt.Chart(chart_data).mark_line()
