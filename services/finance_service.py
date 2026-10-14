@@ -7,6 +7,63 @@ from database.connection import get_connection
 from services.preset_service import get_reporting_baseline_date
 
 
+OPERATING_PAYMENT_TYPES = {'EXPENSE', 'DRIVER_SALARY', 'TRANSFER_FEE', 'OTHER'}
+OTHER_PAYMENT_TYPES = {'LOAN_REPAYMENT', 'OWNER_LOAN_REPAYMENT', 'OWNER_DRAWING', 'DRIVER_ADVANCE'}
+
+
+def get_period_ledger(start_date: date, end_date: date) -> list[dict]:
+    if end_date < start_date:
+        raise ValueError('End date must be on or after start date.')
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute('''SELECT id, transaction_date, transaction_type, direction, amount,
+                description, notes FROM financial_transactions
+                WHERE transaction_date BETWEEN %s AND %s
+                ORDER BY transaction_date, id''', (start_date, end_date))
+            return cursor.fetchall()
+
+
+def summarize_ledger(rows: list[dict], opening=Decimal('0')) -> dict:
+    totals = dict(opening_balance=opening, money_in=Decimal('0'), money_out=Decimal('0'),
+                  collections=Decimal('0'), operating_payments=Decimal('0'), other_payments=Decimal('0'))
+    breakdown = {}
+    for row in rows:
+        kind = row['transaction_type']
+        if kind == 'TRANSFER':
+            continue
+        amount = row['amount']
+        if row['direction'] == 'IN':
+            totals['money_in'] += amount
+            if kind == 'CASHING':
+                totals['collections'] += amount
+        elif row['direction'] == 'OUT':
+            totals['money_out'] += amount
+            if kind in OPERATING_PAYMENT_TYPES:
+                totals['operating_payments'] += amount
+            else:
+                totals['other_payments'] += amount
+                breakdown[kind] = breakdown.get(kind, Decimal('0')) + amount
+    totals['net_movement'] = totals['money_in'] - totals['money_out']
+    totals['closing_balance'] = opening + totals['net_movement']
+    totals['other_payment_breakdown'] = breakdown
+    return totals
+
+
+def get_period_balance(start_date: date, end_date: date) -> dict:
+    baseline = get_reporting_baseline_date()
+    # The approved reporting baseline is a clean-slate opening of zero.
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute('''SELECT COALESCE(SUM(CASE WHEN direction='IN' THEN amount
+                ELSE -amount END),0) AS opening FROM financial_transactions
+                WHERE transaction_date >= %s AND transaction_date < %s
+                  AND transaction_type <> 'TRANSFER' ''', (baseline, start_date))
+            opening = cursor.fetchone()['opening']
+    result = summarize_ledger(get_period_ledger(max(start_date, baseline), end_date), opening) if end_date >= max(start_date, baseline) else summarize_ledger([], opening)
+    result['baseline_date'] = baseline
+    return result
+
+
 def get_collections(start_date: date, end_date: date) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:

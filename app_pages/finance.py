@@ -2,12 +2,15 @@ import streamlit as st
 
 from components.cards import empty_state
 from components.layout import fixed_page_controls
+from components.reporting_period import period_controls
 from services.dashboard_service import get_financial_summary, get_recent_activity
 from services.finance_service import (
     get_business_balance,
     get_business_ledger,
     get_collections,
     get_expenses,
+    get_period_balance,
+    get_period_ledger,
 )
 from utils.dates import period_bounds
 from utils.formatting import format_date, format_whole_kwacha
@@ -32,10 +35,10 @@ def _load_expenses(start_date, end_date):
 
 
 @st.cache_data(ttl=15, max_entries=16, show_spinner=False)
-def _load_balances():
+def _load_balances(start_date, end_date):
     return {
-        "business_balance": get_business_balance(),
-        "ledger": get_business_ledger(limit=20),
+        "business_balance": get_period_balance(start_date, end_date),
+        "ledger": get_period_ledger(start_date, end_date),
     }
 
 
@@ -48,21 +51,23 @@ with fixed_page_controls():
         label_visibility="collapsed",
     )
 
-mode = st.segmented_control("Reporting period", ["Week", "Month"], default="Week")
-start_date, end_date = period_bounds(mode)
+start_date, end_date = period_controls('finance')
 st.caption(f"{format_date(start_date)} to {format_date(end_date)}")
 
 if selected_section == "General":
     finance_data = _load_finance_general(start_date, end_date)
     summary = finance_data["summary"]
     with st.container(horizontal=True):
-        st.metric("Recorded revenue", format_whole_kwacha(summary["revenue"]), border=True)
-        st.metric("Recorded operating costs", format_whole_kwacha(summary["expenses"]), border=True)
-        st.metric("Pending Remittances", format_whole_kwacha(summary["pending_remittances"]), border=True)
+        st.metric("Collections", format_whole_kwacha(summary["revenue"]), border=True)
+        st.metric("Operating Costs", format_whole_kwacha(summary["expenses"]), border=True)
+        st.metric("Other Payments", format_whole_kwacha(get_period_balance(start_date, end_date)['other_payments']), border=True)
+    with st.expander('Other payments breakdown'):
+        for kind, amount in get_period_balance(start_date, end_date)['other_payment_breakdown'].items():
+            st.write(f"{kind.replace('_', ' ').title()}: {format_whole_kwacha(amount)}")
     st.caption("Recorded operating costs exclude loan principal repayments, owner drawings and recoverable advances.")
 
     st.subheader("Recent Activity")
-    activity = finance_data["activity"]
+    activity = [item for item in finance_data["activity"] if start_date <= item['activity_date'] <= end_date]
     if activity:
         for item in activity:
             st.write(f"**{item['title']}**")
@@ -94,19 +99,21 @@ elif selected_section == "Expenses":
         empty_state("No expenses", "No recorded expenses for this period.", ":material/receipt_long:")
 
 else:
-    balance_data = _load_balances()
+    balance_data = _load_balances(start_date, end_date)
     business_balance = balance_data["business_balance"]
 
     st.metric(
-        "Business Balance",
-        format_whole_kwacha(business_balance["business_balance"]),
+        "Closing Business Balance",
+        format_whole_kwacha(business_balance["closing_balance"]),
         border=True,
     )
     st.caption(f"From reporting baseline {format_date(business_balance['baseline_date'])}")
 
     with st.container(horizontal=True):
+        st.metric("Opening Business Balance", format_whole_kwacha(business_balance['opening_balance']), border=True)
         st.metric("Money in", format_whole_kwacha(business_balance["money_in"]), border=True)
         st.metric("Money out", format_whole_kwacha(business_balance["money_out"]), border=True)
+        st.metric("Net Movement", format_whole_kwacha(business_balance['net_movement']), border=True)
 
     st.caption(
         "Loan repayments are financing payments, so they reduce Business Balance without being mixed into operating expenses."
@@ -117,10 +124,10 @@ else:
         st.subheader("Business ledger")
         for item in ledger:
             with st.container(border=True):
-                st.markdown(f"**{item['description'] or item['classification']}**")
+                st.markdown(f"**{item['description'] or item['transaction_type']}**")
                 st.caption(
-                    f"{format_date(item['transaction_date'])} | {item['classification']} | {item['transaction_type']}"
+                    f"{format_date(item['transaction_date'])} | {item['transaction_type']}"
                 )
-                st.markdown(format_whole_kwacha(item["signed_amount"]))
+                st.markdown(format_whole_kwacha(item['amount'] if item['direction'] == 'IN' else -item['amount']))
     else:
         empty_state("No ledger entries", "Recorded money movements will appear here.", ":material/receipt_long:")
