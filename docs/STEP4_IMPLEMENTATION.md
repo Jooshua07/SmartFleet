@@ -19,3 +19,7 @@ Operating revenue is recorded cashing, not financing. Operating costs recognize 
 ## Stage 2
 
 Scheduled cumulative chart uses Thursday/Sunday points and adds a labelled period-end point for trailing activity. Transaction dates remain unchanged. Revenue excludes financing, costs exclude principal/drawings/advances, and cash balance uses the ledger. Separate Month/3 Months/6 Months chart controls. Seven focused chart/performance tests passed; mobile browser verification follows during regression.
+
+## Stage 3
+
+Migration 031 extends existing maintenance records with transport, servicing flag and actual payment date. Other costs use the existing parts_cost field; no inventory workflow. All three real buses had no prior maintenance and were safely scheduled for 18 October 2026. Completion, linked operating expense and ledger payment save atomically. Zero-cost completions have no expense/payment. Audited corrections reuse the payment, and latest completion controls the due date. Threshold tests and disposable PostgreSQL scenarios passed, including duplicates, backdating, zero cost and corrections. Record Servicing is reachable from More and each bus.

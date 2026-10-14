@@ -5,6 +5,7 @@ from components.layout import fixed_page_controls
 from services.bus_service import get_bus_details, get_buses_overview, set_bus_status, update_bus
 from services.driver_service import create_driver, get_driver, get_drivers_overview, update_driver
 from services.route_service import add_route, get_all_routes
+from services.maintenance_service import get_servicing_schedules, set_servicing_schedule, servicing_warning
 from utils.dates import today_lusaka
 from utils.formatting import bus_status_label, format_date
 
@@ -39,6 +40,7 @@ def _render_edit_bus(bus_id: int) -> None:
     )
 
     st.subheader("Edit bus")
+    schedule = next((row for row in get_servicing_schedules() if row['bus_id']==bus_id), {})
     with st.form(f"edit_bus_form_{bus_id}"):
         registration_number = st.text_input("Registration number", value=bus["registration_number"])
         route_label = st.selectbox("Route", route_labels, index=route_index)
@@ -59,6 +61,8 @@ def _render_edit_bus(bus_id: int) -> None:
             format="DD/MM/YYYY",
         )
         notes = st.text_area("Notes", value=bus["notes"] or "", height=80)
+        next_servicing = st.date_input('Next Servicing Date', value=schedule.get('next_due_date'), format='DD/MM/YYYY')
+        frequency = st.number_input('Servicing frequency (days)', min_value=1, value=schedule.get('interval_days') or 35, step=1)
         submitted = st.form_submit_button("Save bus", icon=":material/save:", type="primary")
 
     if submitted:
@@ -74,6 +78,8 @@ def _render_edit_bus(bus_id: int) -> None:
                 date_acquired=date_acquired,
                 notes=notes,
             )
+            if next_servicing and (next_servicing != schedule.get('next_due_date') or frequency != schedule.get('interval_days')):
+                set_servicing_schedule(bus_id,next_servicing,frequency)
             st.cache_data.clear()
             st.session_state.pop("edit_bus_id", None)
             st.success("Bus updated.", icon=":material/check_circle:")
@@ -183,20 +189,14 @@ if selected_section == "Buses":
     )
     status_filter = st.pills(
         "Status filter",
-        ["All", "Active", "In Garage", "Deactivated"],
+        ["All", "Active", "Deactivated"],
         default="All",
         key="bus_status_filter",
     )
 
-    if status_filter == "In Garage":
-        st.warning(
-            "In Garage is not a stored bus status yet. It needs an approved maintenance/downtime definition.",
-            icon=":material/warning:",
-        )
-        buses = []
-    else:
-        db_status = {"Active": "ACTIVE", "Deactivated": "INACTIVE"}.get(status_filter)
-        buses = _load_buses(today_lusaka(), search, db_status)
+    db_status = {"Active": "ACTIVE", "Deactivated": "INACTIVE"}.get(status_filter)
+    buses = _load_buses(today_lusaka(), search, db_status)
+    schedules = {row['bus_id']:row for row in get_servicing_schedules()}
 
     if buses:
         for bus in buses:
@@ -210,6 +210,21 @@ if selected_section == "Buses":
                 st.caption(f"{driver} | {bus['route_name']}")
                 st.caption(f"{model} | {seats}")
                 st.caption(f"Acquired: {format_date(bus['date_acquired'])}")
+                schedule = schedules.get(bus['id'], {})
+                due = schedule.get('next_due_date')
+                if due:
+                    message = f"Servicing: {format_date(due)} | {servicing_warning(due,today_lusaka())}"
+                    level = servicing_warning(due,today_lusaka())
+                    if level in ('Urgent','Overdue'):
+                        st.error(message)
+                    elif level == 'Warning':
+                        st.warning(message)
+                    else:
+                        st.caption(message)
+                if st.button('Record Servicing', icon=':material/build:', key=f"service_bus_{bus['id']}"):
+                    st.session_state.servicing_bus_id = bus['id']
+                    st.session_state.pop('edit_servicing_id',None)
+                    st.switch_page('app_pages/record_servicing.py')
                 if bus["next_document_expiry"]:
                     st.caption(f"Next document expiry: {format_date(bus['next_document_expiry'])}")
                 with st.container(horizontal=True):

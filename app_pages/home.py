@@ -11,6 +11,7 @@ from services.finance_service import get_business_balance
 from services.performance_service import get_business_financial_timeline
 from services.preset_service import get_reporting_baseline_date
 from services.reminder_service import get_open_reminders
+from services.maintenance_service import get_servicing_schedules, servicing_warning
 from services.validation_service import get_data_validation_warnings
 from utils.dashboard_charts import build_business_performance_chart, build_business_performance_chart_data
 from utils.dashboard_charts import build_financial_chart, build_financial_chart_data
@@ -181,6 +182,11 @@ with st.container(border=True):
             st.switch_page("app_pages/reminders.py")
 
     reminders = home_data["reminders"]
+    for schedule in get_servicing_schedules():
+        level = servicing_warning(schedule['next_due_date'], today_lusaka())
+        if level in ('Warning', 'Urgent', 'Overdue'):
+            message = f"{schedule['registration_number']} servicing {format_date(schedule['next_due_date'])} - {level}"
+            (st.warning if level == 'Warning' else st.error)(message)
     if reminders:
         for reminder in reminders:
             st.write(f"**{reminder['title']}**")
