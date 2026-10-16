@@ -124,7 +124,7 @@ Status: **PASSED**. Stage 1 checkpoint **66eed29** was committed and pushed to m
 - Ruff check and format check: passed (22 Python files). pip check: no broken requirements. pip-audit: no known vulnerabilities. git diff --check: passed. Generated-secret scan across tracked/unignored files: zero matches, including the new writer passwords.
 - Live preview owner login plus eight protected management/readiness endpoints: passed. HTTP health: 200. Local preview remains http://127.0.0.1:5002, bound only to this PC and using synthetic data.
 - Verified master and streamlit-final both still point to **46c76438b53b12f7779b89d0e2e74f72c6eb0d4f**. No production activation, real financial data change or existing business schema alteration occurred.
-- Implementation checkpoint hash will be recorded in the follow-up documentation checkpoint after commit; all work stays on migration/flask. Stage 3 is not started in this Stage 2 request.
+- Implementation checkpoint: **1774908204852226db358ed88b600a710c39b7bf**, successfully pushed to origin/migration/flask. This follow-up documentation checkpoint records that immutable implementation hash. Stage 3 is not started in this Stage 2 request.
 
 ## Remaining After Stage 2
 
