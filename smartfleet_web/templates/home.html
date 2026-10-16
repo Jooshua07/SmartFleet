@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><div><p class="eyebrow">YOUR BUSINESS</p><h1>Home</h1></div><i data-lucide="house" aria-hidden="true"></i></div>
+<section class="link-list" aria-label="Overview">
+  <a href="{{ url_for('home.buses') }}"><i data-lucide="bus-front" aria-hidden="true"></i><span>Fleet</span><i data-lucide="chevron-right" aria-hidden="true"></i></a>
+  <a href="{{ url_for('home.finance') }}"><i data-lucide="chart-no-axes-combined" aria-hidden="true"></i><span>Finance</span><i data-lucide="chevron-right" aria-hidden="true"></i></a>
+  <a href="{{ url_for('home.more') }}"><i data-lucide="settings-2" aria-hidden="true"></i><span>Account</span><i data-lucide="chevron-right" aria-hidden="true"></i></a>
+</section>
+{% endblock %}

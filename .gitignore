@@ -4,3 +4,12 @@ __pycache__/
 .pytest_cache/
 backups/
 streamlit-runtime*.log
+.venv-flask*/
+.python-flask/
+.local/
+.env.*.local
+.ruff_cache/
+.coverage
+htmlcov/
+test-results/
+playwright-report/

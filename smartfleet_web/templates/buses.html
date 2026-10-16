@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><div><p class="eyebrow">FLEET REGISTER</p><h1>Buses</h1></div><i data-lucide="bus-front" aria-hidden="true"></i></div>
+<form class="filters" method="get">
+  <label for="search">Search buses</label>
+  <div class="search-row"><input id="search" type="search" name="search" value="{{ search }}" maxlength="100" placeholder="Registration or route"><button type="submit" class="icon-button" aria-label="Search" title="Search"><i data-lucide="search" aria-hidden="true"></i></button></div>
+  <label for="status">Status</label>
+  <select id="status" name="status"><option value="">All buses</option><option value="ACTIVE" {% if status == 'ACTIVE' %}selected{% endif %}>Active</option><option value="INACTIVE" {% if status == 'INACTIVE' %}selected{% endif %}>Deactivated</option></select>
+  <button class="filter-button" type="submit"><i data-lucide="list-filter" aria-hidden="true"></i>Apply</button>
+</form>
+<div class="bus-list" aria-label="Bus records">
+{% for bus in buses %}
+<article class="bus-card">
+  <div class="bus-top"><h2>{{ bus.registration_number }}</h2><span class="status {{ 'active' if bus.status == 'ACTIVE' else 'inactive' }}">{{ 'Active' if bus.status == 'ACTIVE' else 'Deactivated' }}</span></div>
+  <p class="route"><i data-lucide="route" aria-hidden="true"></i>{{ bus.route_name }}</p>
+  <p class="bus-meta">{{ bus.model or 'Model not recorded' }}{% if bus.seating_capacity %} <span aria-hidden="true">/</span> {{ bus.seating_capacity }} seats{% endif %}</p>
+</article>
+{% else %}
+<div class="empty-state"><i data-lucide="bus-front" aria-hidden="true"></i><h2>No buses found</h2><p>{{ 'Try another registration or route.' if search or status else 'No buses have been recorded.' }}</p></div>
+{% endfor %}
+</div>
+<nav class="pagination" aria-label="Bus pages">
+{% if page > 1 %}<a href="{{ url_for('home.buses', page=page-1, search=search, status=status) }}"><i data-lucide="chevron-left" aria-hidden="true"></i>Previous</a>{% endif %}
+<span>Page {{ page }}</span>
+{% if has_next %}<a href="{{ url_for('home.buses', page=page+1, search=search, status=status) }}">Next<i data-lucide="chevron-right" aria-hidden="true"></i></a>{% endif %}
+</nav>
+{% endblock %}

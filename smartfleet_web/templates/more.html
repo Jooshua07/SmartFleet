@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><div><p class="eyebrow">ACCOUNT</p><h1>More</h1></div><i data-lucide="settings-2" aria-hidden="true"></i></div>
+<section class="account-details"><h2>Owner</h2><p>Signed in</p></section>
+<form method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary" type="submit"><i data-lucide="log-out" aria-hidden="true"></i>Sign out</button></form>
+{% endblock %}

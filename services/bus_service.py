@@ -15,10 +15,28 @@ DOCUMENT_TYPES = {
 }
 
 
-def get_all_buses():
+def get_all_buses(limit=None, offset=0, search=None, status=None):
+    if limit is not None and (not isinstance(limit, int) or not 1 <= limit <= 100):
+        raise ValueError("Choose a page size from 1 to 100.")
+    if not isinstance(offset, int) or offset < 0:
+        raise ValueError("Invalid page offset.")
+    if status not in {None, "", "ACTIVE", "INACTIVE"}:
+        raise ValueError("Invalid bus status.")
+    clauses = []
+    params = []
+    if search:
+        clauses.append("(b.registration_number ILIKE %s OR r.name ILIKE %s)")
+        params.extend([f"%{search}%", f"%{search}%"])
+    if status:
+        clauses.append("b.status = %s")
+        params.append(status)
+    where_sql = "WHERE " + " AND ".join(clauses) if clauses else ""
+    page_sql = " LIMIT %s OFFSET %s" if limit is not None else ""
+    if limit is not None:
+        params.extend([limit, offset])
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT
                     b.id,
                     b.registration_number,
@@ -31,8 +49,9 @@ def get_all_buses():
                     b.notes
                 FROM buses b
                 JOIN routes r ON b.route_id = r.id
-                ORDER BY b.id;
-            """)
+                {where_sql}
+                ORDER BY b.id{page_sql};
+            """, params)
 
             return cursor.fetchall()
 

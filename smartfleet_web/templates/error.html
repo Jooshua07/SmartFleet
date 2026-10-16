@@ -1,0 +1,4 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="empty-state"><i data-lucide="circle-alert" aria-hidden="true"></i><p class="eyebrow">{{ code }}</p><h1>{{ message }}</h1><a class="button secondary" href="{{ url_for('home.index') }}">Back to Home</a></div>
+{% endblock %}

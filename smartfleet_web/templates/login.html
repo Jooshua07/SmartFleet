@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="login-panel">
+  <p class="eyebrow">OWNER ACCESS</p>
+  <h1>Sign in</h1>
+  {% if error %}<p class="alert error" role="alert">{{ error }}</p>{% endif %}
+  <form method="post" action="{{ url_for('auth.login', next=next_url) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label for="username">Username</label>
+    <input id="username" name="username" value="{{ username }}" autocomplete="username" maxlength="100" required autofocus>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" maxlength="1024" required>
+    <button class="primary" type="submit"><i data-lucide="log-in" aria-hidden="true"></i>Sign in</button>
+  </form>
+</section>
+{% endblock %}

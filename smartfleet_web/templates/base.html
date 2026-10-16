@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ffffff">
+  <title>{{ title or 'Sign in' }} | SmartFleet</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script defer src="{{ url_for('static', filename='vendor/lucide.min.js') }}"></script>
+  <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="app-header">
+    <a class="brand" href="{{ url_for('home.index') }}" aria-label="SmartFleet home"><i data-lucide="bus-front" aria-hidden="true"></i>SmartFleet</a>
+    <span class="environment">Local</span>
+  </header>
+  {% if owner_signed_in and active in ('buses', 'finance') %}
+  <div class="section-heading"><span>{{ title }}</span></div>
+  {% endif %}
+  <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
+  {% if owner_signed_in %}
+  <nav class="bottom-nav" aria-label="Main navigation">
+    {% for name, endpoint, icon in [('Home','home.index','house'),('Buses','home.buses','bus-front'),('Finance','home.finance','chart-no-axes-combined'),('More','home.more','grid-2x2')] %}
+    <a href="{{ url_for(endpoint) }}" {% if active == name|lower %}aria-current="page"{% endif %}><i data-lucide="{{ icon }}" aria-hidden="true"></i><span>{{ name }}</span></a>
+    {% endfor %}
+  </nav>
+  {% endif %}
+</body>
+</html>
