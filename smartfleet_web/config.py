@@ -25,6 +25,15 @@ def settings_from_environment():
             "user": env.get("SMARTFLEET_DB_USER"),
             "password": env.get("SMARTFLEET_DB_PASSWORD"),
         },
+        "WRITE_DB_SETTINGS": None
+        if not env.get("SMARTFLEET_WRITE_DB_PASSWORD")
+        else {
+            "host": env.get("SMARTFLEET_DB_HOST"),
+            "port": env.get("SMARTFLEET_DB_PORT", "5432"),
+            "dbname": env.get("SMARTFLEET_DB_NAME"),
+            "user": env.get("SMARTFLEET_WRITE_DB_USER"),
+            "password": env.get("SMARTFLEET_WRITE_DB_PASSWORD"),
+        },
         "TRUSTED_HOSTS": env.get("SMARTFLEET_TRUSTED_HOSTS", "localhost,127.0.0.1,[::1]").split(
             ","
         ),
@@ -99,3 +108,20 @@ def validate_settings(config):
         "application_name": "smartfleet-flask-isolated",
         "options": "-c default_transaction_read_only=on -c statement_timeout=5000",
     }
+    writer = config.get("WRITE_DB_SETTINGS")
+    if writer is not None:
+        if (
+            writer.get("host") != db["host"]
+            or writer.get("dbname") != expected_name
+            or writer.get("user") != expected_name + "_writer"
+            or str(writer.get("port")) != str(port)
+            or not writer.get("password")
+        ):
+            raise ValueError("Writes require the separate restricted isolated writer role.")
+        config["WRITE_DB_SETTINGS"] = {
+            **writer,
+            "port": port,
+            "connect_timeout": 5,
+            "application_name": "smartfleet-flask-command",
+            "options": "-c statement_timeout=10000 -c lock_timeout=5000",
+        }

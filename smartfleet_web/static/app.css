@@ -64,6 +64,26 @@ button, .button { display: inline-flex; align-items: center; justify-content: ce
 .account-details { padding: 20px 0; border-top: 1px solid var(--line); margin-bottom: 20px; }
 .account-details p { color: var(--muted); margin-top: 5px; }
 .alert { padding: 12px; border-left: 3px solid var(--red); background: #fbeceb; border-radius: 3px; margin: 18px 0; font-size: 13px; color: #872c2c; }
+.notice { padding: 12px; border-left: 3px solid var(--green); background: #e6f3eb; margin-bottom: 18px; }
+.section-tabs { display: flex; gap: 26px; }
+.section-tabs a { min-height: 24px; }
+.edit-form { max-width: 600px; }
+.form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 20px 0; }
+.form-actions .primary { width: auto; margin-top: 0; }
+.register-row, .history { padding: 20px 0; border-bottom: 1px solid var(--line); }
+.register-row p, .history p { margin-top: 8px; }
+.history h2 { margin-bottom: 12px; }
+.record-link { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin-top: 8px; color: #1168d4; font-size: 13px; }
+.amounts { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; font-size: 14px; }
+.amounts dd { margin: 0; font-variant-numeric: tabular-nums; }
+.check-label { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 5px 0; font-weight: 500; }
+.check-label input { width: 21px; min-height: 21px; height: 21px; margin: 0; flex: 0 0 21px; }
+.schedule-day { border-bottom: 1px solid var(--line); padding: 12px 0; }
+.schedule-day summary { cursor: pointer; min-height: 40px; padding: 8px 0; font-weight: 650; }
+.schedule-day fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.schedule-day legend { font-size: 13px; font-weight: 650; padding: 12px 0; }
+.weekday-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 2px 12px; }
+.field-label { font-size: 13px; font-weight: 650; margin-top: 12px; }
 :focus-visible { outline: 3px solid #7bb5ff; outline-offset: 3px; }
 .skip-link { position: fixed; top: -70px; left: 8px; background: #fff; padding: 12px; z-index: 9; }
 .skip-link:focus { top: 8px; }

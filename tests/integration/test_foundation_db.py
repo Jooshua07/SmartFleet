@@ -66,7 +66,7 @@ def test_schema_integrity_objects_are_present(isolated_app):
             triggers = conn.execute(
                 "SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgenabled='O'"
             ).fetchone()[0]
-        assert tables == 39
+        assert tables == 41  # 39 preserved business tables plus two isolated command-safety tables.
         assert functions == 20
         assert triggers == 51
     finally:

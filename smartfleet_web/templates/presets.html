@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><h1>Business Presets</h1></div>
+<div class="link-list">
+{% for label,kind,icon in [('Cashing','rate','coins'),('Salaries','salary','users'),('Driver advance limit','advance','badge-dollar-sign'),('Reminders','reminder','bell'),('Reporting','reporting','calendar-days')] %}
+<a href="{{ url_for('management.edit', kind=kind) }}"><i data-lucide="{{ icon }}" aria-hidden="true"></i><span>{{ label }}</span><i data-lucide="chevron-right" aria-hidden="true"></i></a>
+{% endfor %}
+<a href="{{ url_for('management.schedule') }}"><i data-lucide="calendar-check" aria-hidden="true"></i><span>Schedule</span><i data-lucide="chevron-right" aria-hidden="true"></i></a>
+</div>
+<section class="history"><h2>Cashing rates</h2>{% for row in rates %}<p>{{ 'Normal day' if row.rate_type == 'NORMAL_DAY' else 'Sunday' }} | K {{ row.amount }} | {{ row.effective_from }} to {{ row.effective_to or 'Present' }}</p>{% endfor %}</section>
+<section class="history"><h2>Salary history</h2>{% for row in salaries %}<p>{{ row.driver_name or 'Default' }} | K {{ row.monthly_salary }} | {{ row.effective_from }} to {{ row.effective_to or 'Present' }}</p>{% endfor %}</section>
+<section class="history"><h2>Reminders</h2>{% for row in reminders %}<p>{{ row.preset_key.replace('_',' ').title() }} | {{ row.warning_days }} days</p>{% endfor %}</section>
+<section class="history"><h2>Reporting baseline</h2><p>{{ settings.get('REPORTING_BASELINE_DATE', {}).get('setting_value', '2026-10-01') }}</p></section>
+{% endblock %}

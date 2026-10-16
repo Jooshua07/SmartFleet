@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><h1>{{ title }}</h1><a class="button secondary" href="{{ url_for('management.edit', kind=kind) }}"><i data-lucide="plus" aria-hidden="true"></i>Add {{ 'route' if kind == 'route-new' else 'driver' }}</a></div>
+<div class="register-list">
+{% for row in rows %}
+<article class="register-row"><h2>{{ row.name if kind == 'route-new' else row.full_name }}</h2>
+{% if kind == 'route-new' %}<p>{{ row.description or '' }}</p><span class="bus-meta">{{ 'Active' if row.active else 'Inactive' }}</span>
+{% else %}<p>{{ row.phone or '' }}{% if row.assigned_bus %} | {{ row.assigned_bus }}{% endif %}</p><span class="bus-meta">{{ row.employment_status or 'No active employment' }}</span><a class="record-link" href="{{ url_for('management.edit', kind='driver-edit', record_id=row.id) }}"><i data-lucide="pencil" aria-hidden="true"></i>Edit driver</a>{% endif %}
+</article>
+{% else %}<p class="empty-state">No records.</p>{% endfor %}
+</div>
+{% endblock %}

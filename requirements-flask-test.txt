@@ -3,4 +3,5 @@ pytest>=8.4,<10
 ruff>=0.14,<1
 playwright>=1.56,<2
 pip-audit>=2.9,<3
+pip>=26.2.1,<27
 cryptography>=50.0.2,<51

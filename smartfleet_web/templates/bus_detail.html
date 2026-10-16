@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><h1>{{ bus.registration_number }}</h1><span class="status {{ 'active' if bus.status == 'ACTIVE' else 'inactive' }}">{{ bus.status }}</span></div>
+<p>{{ bus.route_name }} | {{ bus.model or '' }}</p>
+<div class="form-actions"><a class="button secondary" href="{{ url_for('management.edit', kind='bus-edit', record_id=bus.id) }}"><i data-lucide="pencil" aria-hidden="true"></i>Edit bus</a><a class="button secondary" href="{{ url_for('management.edit', kind='bus-status', record_id=bus.id) }}">Change status</a></div>
+<section class="history"><h2>Status history</h2>{% for row in status_history %}<p>{{ row.status }} | {{ row.effective_from }} to {{ row.effective_to or 'Present' }}</p><p class="bus-meta">{{ row.reason or '' }}</p>{% endfor %}</section>
+<section class="history"><h2>Route history</h2>{% for row in route_history %}<p>{{ row.route_name }} | {{ row.effective_from }} to {{ row.effective_to or 'Present' }}</p>{% endfor %}</section>
+<section class="history"><h2>Documents</h2>{% for row in documents %}<p>{{ row.document_type }} | {{ row.document_number or '' }} | {{ row.expiry_date or '' }}</p>{% else %}<p class="bus-meta">No documents.</p>{% endfor %}</section>
+{% endblock %}

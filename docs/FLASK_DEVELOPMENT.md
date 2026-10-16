@@ -1,6 +1,6 @@
 # Isolated Flask Development
 
-Stage 1 is a secure, read-only foundation, not feature parity. The Streamlit application remains the complete reference. No production deployment is authorized.
+Stages 1-2 provide the secure foundation and reference-data management, not full feature parity. The Streamlit application remains the complete reference. No production deployment is authorized.
 
 ## Environment
 
@@ -34,6 +34,22 @@ Development URL: https://127.0.0.1:5001 (local self-signed certificate). The dev
 For a certificate-warning-free preview on this PC, run `scripts/run_flask_dev.py --http --port 5002` with the Flask environment's Python and open http://127.0.0.1:5002. This explicit local-only mode uses a distinct HTTP session cookie; it does not alter the secure-cookie default, production configuration, database isolation or loopback binding. Do not expose this development server on the network.
 
 Stage 1 includes owner sign-in/logout, expiring/revocable sessions, CSRF, bounded login throttling, safe errors, four navigation shells and real paginated read-only bus listing. Finance/dashboard totals and financial recording are not implemented yet. Do not interpret shell pages as completed financial functionality.
+
+## Stage 2 management and command safety
+
+After Stage 1 provisioning, run `.venv-flask/Scripts/python.exe scripts/setup_flask_stage2.py`. It accepts only the existing loopback `smartfleet_flask_dev` and `smartfleet_flask_test` targets and their dedicated owner credentials. It applies the versioned `migrations/flask/001_command_safety.sql` only there, adds restricted writer roles, and initializes missing synthetic configuration/history. It does not replay any legacy migration or touch the source/VPS database. Restart the preview to load generated writer settings. Private generated credentials stay in ignored local environment files.
+
+Reads still use the read-only role; commands alone use the separate writer. Runtime writers cannot create schema, delete business records, edit/delete audit records, or write the financial ledger at this stage. Missing writer configuration fails closed on save. Home/Finance totals and cashing/expense entry remain for later stages.
+
+Buses now links to registration, details, editing and effective-dated status/route history. Registration supports an optional available driver and five existing document categories. Drivers can be created with employment or edited; their initial permanent assignment can be made while registering a bus. Routes can be added/viewed, matching the existing Streamlit scope. This does not invent employment termination/re-employment or route-deletion workflows absent from the legacy UI. Accounts supports the existing starting-balance workflow, with reasons and audit evidence.
+
+More -> Business Presets includes cashing rates, salary presets, advance limit, reminders, reporting baseline and Schedule. Thursday/Sunday are initialized as defaults. Schedule replaces a complete weekly configuration at a new effective date, retaining closed historical rules; it never overwrites recorded collections. A supported week covers Monday-Saturday exactly once in consecutive groups, plus one optional previous-Sunday allocation. A date-level transition check rejects duplicated/missing work across the changeover. Other financial meanings, including Sunday-only normal coverage or disjoint day groups, are deliberately rejected rather than invented. Already-recorded affected periods block a change. Existing bus history determines eligible active work days.
+
+The shared smart-cashing preview accepts explicit effective-dated `schedule_rules`. Flask's protected `/presets/schedule/coverage?date=YYYY-MM-DD` resolves those presets now; Stage 3 recording routes must use that same resolver/rule list for both preview and commit, never the legacy fixed-day fallback. Existing Streamlit callers retain their unchanged legacy default while Flask feature migration continues.
+
+Durable command and actor-attributed before/after audit rows share the business commit. UUID keys and database advisory locks serialize retries and stale edits, with signed form versions and CSRF. Service contexts borrow the command connection without committing independently; caught nested failures still force rollback. Commit-time database errors and audit-write errors return no success and roll back everything. Successful POST redirects clear the workflow; invalid submissions retain their fields. Keys/audits are insert-only for the runtime writer. The existing `correction_audit` table and cancellation effects remain unchanged for Stage 3+ porting.
+
+Tests restore only synthetic changes in the dedicated test database. Do not run its integration fixtures with concurrent pytest workers or another writer on that same test database. Browser artifacts remain ignored. The application is still single-process for owner sessions/throttling, and still cannot start with production configuration.
 
 The initial in-memory owner-session registry is deliberately single-process: restart signs all devices out, logout revokes captured cookies, and capacity is bounded. Do not run multiple Gunicorn workers with this store. A shared session backend must be designed/tested before increasing processes. Login throttling is bounded and thread-safe in this process; production must also rate-limit at the trusted reverse proxy. No client-supplied forwarded address is trusted now.
 

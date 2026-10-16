@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="page-title"><div><p class="eyebrow">FLEET REGISTER</p><h1>Buses</h1></div><i data-lucide="bus-front" aria-hidden="true"></i></div>
+<a class="button secondary" href="{{ url_for('management.edit', kind='bus-new') }}"><i data-lucide="plus" aria-hidden="true"></i>Add bus</a>
 <form class="filters" method="get">
   <label for="search">Search buses</label>
   <div class="search-row"><input id="search" type="search" name="search" value="{{ search }}" maxlength="100" placeholder="Registration or route"><button type="submit" class="icon-button" aria-label="Search" title="Search"><i data-lucide="search" aria-hidden="true"></i></button></div>
@@ -14,6 +15,7 @@
   <div class="bus-top"><h2>{{ bus.registration_number }}</h2><span class="status {{ 'active' if bus.status == 'ACTIVE' else 'inactive' }}">{{ 'Active' if bus.status == 'ACTIVE' else 'Deactivated' }}</span></div>
   <p class="route"><i data-lucide="route" aria-hidden="true"></i>{{ bus.route_name }}</p>
   <p class="bus-meta">{{ bus.model or 'Model not recorded' }}{% if bus.seating_capacity %} <span aria-hidden="true">/</span> {{ bus.seating_capacity }} seats{% endif %}</p>
+  <a class="record-link" href="{{ url_for('management.bus_detail', bus_id=bus.id) }}">Details<i data-lucide="chevron-right" aria-hidden="true"></i></a>
 </article>
 {% else %}
 <div class="empty-state"><i data-lucide="bus-front" aria-hidden="true"></i><h2>No buses found</h2><p>{{ 'Try another registration or route.' if search or status else 'No buses have been recorded.' }}</p></div>

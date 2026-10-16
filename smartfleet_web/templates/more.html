@@ -2,5 +2,9 @@
 {% block content %}
 <div class="page-title"><div><p class="eyebrow">ACCOUNT</p><h1>More</h1></div><i data-lucide="settings-2" aria-hidden="true"></i></div>
 <section class="account-details"><h2>Owner</h2><p>Signed in</p></section>
+<div class="link-list">
+<a href="{{ url_for('management.presets') }}"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span>Business Presets</span><i data-lucide="chevron-right" aria-hidden="true"></i></a>
+<a href="{{ url_for('management.accounts') }}"><i data-lucide="wallet" aria-hidden="true"></i><span>Accounts</span><i data-lucide="chevron-right" aria-hidden="true"></i></a>
+</div>
 <form method="post" action="{{ url_for('auth.logout') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary" type="submit"><i data-lucide="log-out" aria-hidden="true"></i>Sign out</button></form>
 {% endblock %}

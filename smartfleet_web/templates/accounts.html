@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><h1>Accounts</h1></div>
+{% for account in accounts %}
+<article class="register-row"><h2>{{ account.name }}</h2><dl class="amounts"><dt>Starting balance</dt><dd>K {{ '{:,.2f}'.format(account.opening_balance) }}</dd><dt>Account balance</dt><dd>K {{ '{:,.2f}'.format(account.calculated_balance) }}</dd></dl>
+<a class="record-link" href="{{ url_for('management.edit', kind='account', record_id=account.id) }}"><i data-lucide="pencil" aria-hidden="true"></i>Edit starting balance</a></article>
+{% endfor %}
+{% endblock %}

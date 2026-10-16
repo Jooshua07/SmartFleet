@@ -39,8 +39,11 @@ def _money(value, field_name: str, allow_negative: bool = False) -> Decimal:
     return amount
 
 
-def get_collection_coverage(collection_date: date) -> dict:
+def get_collection_coverage(collection_date: date, schedule_rules=None) -> dict:
     collection_date = _coerce_date(collection_date, "Collection date")
+    if schedule_rules is not None:
+        from services.collection_schedule_service import coverage_from_rules
+        return coverage_from_rules(collection_date, schedule_rules)
     weekday = collection_date.isoweekday()
     if weekday == 7:
         return {
@@ -93,8 +96,8 @@ def _load_bus_rows(bus_ids: list[int]) -> list[dict]:
             return cursor.fetchall()
 
 
-def get_smart_cashing_preview(collection_date: date) -> dict:
-    coverage = get_collection_coverage(collection_date)
+def get_smart_cashing_preview(collection_date: date, schedule_rules=None) -> dict:
+    coverage = get_collection_coverage(collection_date, schedule_rules=schedule_rules)
     rates = get_cashing_rates_for_date(collection_date)
     active_days = bus_service.get_bus_active_day_counts(coverage["coverage_start"], coverage["coverage_end"])
     buses = _load_bus_rows(list(active_days))

@@ -92,7 +92,42 @@ Review/fix any reported vulnerabilities, rerun the relevant tests if dependencie
 - Ruff check, pip check and git diff --check passed. Generated-secret scan across tracked/unignored candidates: **zero matches**. Legacy Streamlit regression remains the separately verified 97-case run above; no legacy code changed during package remediation.
 - Stage 1 is eligible for checkpoint on migration/flask. The Stage 1 commit hash will be recorded in the subsequent Stage 2 progress entry, avoiding a self-referential hash.
 
-2. Transaction safety, fleet, presets, effective-dated schedules and financial accounts.
+## Stage 2 - Transaction safety and fleet management
+
+Status: **PASSED**. Stage 1 checkpoint **66eed29** was committed and pushed to migration/flask before Stage 2 began.
+
+### Implemented
+
+- Versioned isolated-only migration for `web_commands` and `web_command_audit`. A durable table is necessary because browser-disabled buttons and process memory cannot prevent retries after a response loss/restart. Both command result and actor/reason/before/after evidence commit atomically with the service operation.
+- Shared transaction context lets existing service `with get_connection()` blocks borrow one connection without independent commits. Nested service failures, audit failures and deferred commit failures roll back the command. Database advisory locks, UUID keys and payload hashes protect simultaneous retries; signed version tokens reject stale forms and altered submissions.
+- Restricted local writer roles and explicit grants, separate from read-only request roles and schema owners. Only the two isolated local Flask databases were prepared. The 39 business tables, 20 existing integrity functions and 51 existing triggers remain; two safety tables were added. No production/VPS/source database change.
+- Owner/CSRF-protected bus registration/editing, initial driver assignment, five document categories, status/route history and activation/deactivation; routes add/list; drivers create with employment/edit. Financial accounts show/edit the existing starting balances. No unsupported route-deletion or employment-lifecycle feature is claimed.
+- More -> Business Presets: rates, salaries, advance limit, reminders, reporting baseline and collection schedules. Thursday/Sunday defaults remain; full-week effective-dated replacements allow added/changed collection days, check coverage/transition ambiguity, retain history and block changes affecting recorded collections.
+- Existing smart-cashing service now accepts explicit schedule rules; its dated preview was verified against real isolated bus activation history. Legacy Streamlit callers keep their previous default. Stage 3 financial recording must pass the dated Flask rule set for both preview and commit.
+- Phone-first fleet tabs, forms, history/details, account and preset screens. Success redirects; missing/incorrect inputs retain drafts. Reason/actor data comes from validated input/authentication, not a posted identity. All application financial writes remain unimplemented/disabled until their stages pass.
+
+### Verification evidence so far
+
+- Initial Stage 2 web/foundation database run: **88 passed**. First command/workflow integration slice: **16 passed**.
+- Expanded web/database/command/workflow run: **105 passed in 47.63s**, including a real fresh-Python-process retry, simultaneous same/different-key submissions, stale edits, audit reconciliation and commit-time rollback.
+- Expanded targeted slice: **51 passed in 23.57s**, adding restricted-writer configuration, audit-insertion failure and historical active-day calculations.
+- Stage 2 Edge phone/desktop journeys: **3 passed in 40.75s** at 375x667,390x844,1366x900, covering actual driver/bus saves, bus edits, account starting balances and schedule additions/history. Phone screenshot visually reviewed; fixed chrome does not overlap the scrollable form.
+- Legacy regression rerun with workspace TEMP/TMP and read-only PGOPTIONS: **97 passed in 13.293s**; expected Streamlit missing-context warnings only. An earlier run's tests also passed but its sandbox temporary-directory cleanup warned; workspace TEMP/TMP resolved that environment issue.
+- Further workflow coverage added for all preset kinds, forged posted actor, fresh blank forms, duplicate route, invalid bus details and date-level transition rejection. One test initially used a nonconsecutive weekly pattern and therefore hit the earlier correct validation rather than the intended transition assertion. Replaced only that fixture with a valid Friday/Sunday week that repeats already-covered work across a Friday changeover; the unchanged rejection assertion then passed (**1 passed in 1.51s**).
+- Dependency audit rerun: **No known vulnerabilities found**. Ruff lint/format and package consistency pass. Interrupted pip-upgrade backup directories were moved from the active environment into ignored workspace storage, preserving them without deletion; package checks are warning-free.
+- Local preview restarted with Stage 2 at http://127.0.0.1:5002; health returned 200. It remains loopback-only, not phone/public deployment.
+
+### Final acceptance
+
+- Full combined command: set workspace-local TEMP/TMP and SMARTFLEET_BROWSER_CHANNEL=msedge; `.venv-flask/Scripts/python.exe -m pytest tests/web tests/integration -q`: **132 passed in 176.34s**, including all nine phone/desktop HTTP/HTTPS browser journeys, isolated PostgreSQL writes, concurrency, real-process retry and rollback cases.
+- Existing Streamlit suite: **97 passed in 13.293s** separately, excluding the live connection test and using read-only PGOPTIONS. No skipped test was counted as passed.
+- Ruff check and format check: passed (22 Python files). pip check: no broken requirements. pip-audit: no known vulnerabilities. git diff --check: passed. Generated-secret scan across tracked/unignored files: zero matches, including the new writer passwords.
+- Live preview owner login plus eight protected management/readiness endpoints: passed. HTTP health: 200. Local preview remains http://127.0.0.1:5002, bound only to this PC and using synthetic data.
+- Verified master and streamlit-final both still point to **46c76438b53b12f7779b89d0e2e74f72c6eb0d4f**. No production activation, real financial data change or existing business schema alteration occurred.
+- Implementation checkpoint hash will be recorded in the follow-up documentation checkpoint after commit; all work stays on migration/flask. Stage 3 is not started in this Stage 2 request.
+
+## Remaining After Stage 2
+
 3. Expenses, cashing/backfill, corrections and obligations.
 4. Dashboard, finance, periods and reconciling Bus Accounts.
 5. Payroll, business loans and owner money.

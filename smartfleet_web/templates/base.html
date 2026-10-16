@@ -16,9 +16,15 @@
     <span class="environment">Local</span>
   </header>
   {% if owner_signed_in and active in ('buses', 'finance') %}
-  <div class="section-heading"><span>{{ title }}</span></div>
+  <div class="section-heading">
+  {% if active == 'buses' %}
+    <nav class="section-tabs" aria-label="Fleet sections">
+      <a href="{{ url_for('home.buses') }}">Buses</a><a href="{{ url_for('management.routes') }}">Routes</a><a href="{{ url_for('management.drivers') }}">Drivers</a>
+    </nav>
+  {% else %}<span>{{ title }}</span>{% endif %}
+  </div>
   {% endif %}
-  <main id="main" tabindex="-1">{% block content %}{% endblock %}</main>
+  <main id="main" tabindex="-1">{% for message in get_flashed_messages() %}<p class="notice" role="status">{{ message }}</p>{% endfor %}{% block content %}{% endblock %}</main>
   {% if owner_signed_in %}
   <nav class="bottom-nav" aria-label="Main navigation">
     {% for name, endpoint, icon in [('Home','home.index','house'),('Buses','home.buses','bus-front'),('Finance','home.finance','chart-no-axes-combined'),('More','home.more','grid-2x2')] %}
