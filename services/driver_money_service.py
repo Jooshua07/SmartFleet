@@ -495,6 +495,18 @@ def record_driver_salary(
                 ),
             )
             salary = cursor.fetchone()
+            if preview["other_deductions"] > 0:
+                cursor.execute(
+                    """INSERT INTO driver_deductions
+                    (employment_id,deduction_date,amount,deduction_type,reason,applied,notes)
+                    VALUES (%s,%s,%s,'OTHER','Salary deduction',TRUE,%s) RETURNING id""",
+                    (employment_id, payment_date, preview["other_deductions"], clean_optional_text(notes)),
+                )
+                deduction_id = cursor.fetchone()["id"]
+                cursor.execute(
+                    "INSERT INTO salary_deduction_allocations(salary_id,deduction_id,amount) VALUES (%s,%s,%s)",
+                    (salary["id"], deduction_id, preview["other_deductions"]),
+                )
             for allocation in allocations:
                 cursor.execute(
                     """
@@ -621,6 +633,14 @@ def cancel_driver_salary(salary_id: int, reason: str) -> dict:
             )
             cursor.execute("DELETE FROM salary_advance_recoveries WHERE salary_id = %s;", (salary_id,))
             cursor.execute("DELETE FROM salary_deduction_allocations WHERE salary_id = %s;", (salary_id,))
+            for deduction in deductions:
+                cursor.execute(
+                    """UPDATE driver_deductions d SET applied=(d.amount=(
+                        SELECT COALESCE(SUM(a.amount),0) FROM salary_deduction_allocations a
+                        JOIN driver_salaries s ON s.id=a.salary_id
+                        WHERE a.deduction_id=d.id AND s.status='PAID')) WHERE d.id=%s""",
+                    (deduction["deduction_id"],),
+                )
             cursor.execute("DELETE FROM driver_salaries WHERE id = %s;", (salary_id,))
             if salary["financial_transaction_id"] is not None:
                 cursor.execute(

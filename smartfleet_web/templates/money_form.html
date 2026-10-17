@@ -1,0 +1,5 @@
+{% extends 'manage_form.html' %}
+{% block extra_fields %}
+{% if salary_form %}<button class="secondary" type="submit" name="intent" value="preview" formnovalidate><i data-lucide="calculator" aria-hidden="true"></i>Preview salary</button>{% endif %}
+{% if salary_preview %}<section class="salary-preview" aria-label="Salary preview"><h2>Salary preview</h2><dl><dt>Worked days</dt><dd>{{ salary_preview.worked_days }} / {{ salary_preview.days_in_month }}</dd><dt>Earned salary</dt><dd>K {{ salary_preview.prorated_salary }}</dd><dt>Outstanding advances</dt><dd>K {{ salary_preview.total_outstanding_advances }}</dd><dt>Suggested recovery</dt><dd>K {{ salary_preview.suggested_recovery }}</dd><dt>Net with suggested recovery</dt><dd>K {{ salary_preview.net_salary }}</dd></dl></section>{% endif %}
+{% endblock %}

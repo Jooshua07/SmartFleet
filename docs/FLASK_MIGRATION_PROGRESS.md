@@ -2,6 +2,17 @@
 
 Branch: migration/flask. Historical master/tag remain unchanged.
 
+## Current Working Record - 17 October 2026
+
+This is the living record of completed work, verification, decisions and next steps. Update it whenever behavior, configuration, preview data or the implementation plan changes. Earlier sections are chronological evidence, not necessarily the current preview state. The detailed architectural plan remains in [FLASK_MIGRATION_AUDIT_AND_PLAN.md](FLASK_MIGRATION_AUDIT_AND_PLAN.md); current operating instructions are in [FLASK_DEVELOPMENT.md](FLASK_DEVELOPMENT.md).
+
+- Stages 1-5 have passed acceptance. Stage 4 implementation checkpoint: 52b8211; documentation: f1df299. Stage 5 publication is recorded in its checkpoint section below.
+- Preview: http://127.0.0.1:5002, HTTP bound to this PC only. Following the owner's explicit request, smartfleet_flask_dev now contains an exact local copy of the real business records, not the earlier demo buses. It is a development snapshot, not the authoritative database and not a synchronization mechanism.
+- Original local smartfleet and the VPS remain untouched. Automated tests continue to use only smartfleet_flask_test with synthetic fixtures. Never redirect tests to the copied preview or the original business database.
+- Local preview login password was changed at the owner's request; credentials remain only in ignored local configuration/login files. Do not put the password, database dumps, business records, generated screenshots or fixture credentials into Git.
+- Home Business performance red line now shows cumulative **Total Expenses**: all outgoing ledger payments within the selected chart dates, not operating costs alone. Internal account transfers are excluded consistently with the Home totals; bus operating-cost attribution remains unchanged.
+- Stage 5 payroll, loans, owner money and the requested UI refinements are complete. Stage 6 remains servicing/reminders, reports/exports, backups/help/parity, followed by Stage 7 verification/CI/deployment preparation. No production deployment or network/public preview is authorized.
+
 ## Stage 1 - Development foundation and secure Flask application
 
 Status: **PASSED on resumption.** The earlier network/security blockers below are historical; patched packages and all current foundation gates now pass.
@@ -193,3 +204,62 @@ Status: **PASSED**.
 
 - Stage 4 implementation: **52b82118a8ccbee9791f7a2a3f4165d6be96dc27**, successfully pushed to origin/migration/flask. Stage 3 remains preserved at **3ba7031e46de8f18b8023278c3144f108aa67959**. This documentation-only follow-up records the immutable implementation hash.
 - Working tree was clean and synchronized after the implementation push. Final usage check: **46% five-hour / 25% weekly**. No required test/security/tool session remains running; only the intentional loopback preview remains available. Stage 5 has not started.
+
+## Owner-Authorized Real-Data Preview and Local Access Update
+
+Date: 17 October 2026. The owner requested recognizable real buses, drivers, cashing and business history in the development preview, plus a new local sign-in password and a continuously maintained working document.
+
+- Read-only inspection identified the local smartfleet source: 3 buses, 3 drivers, 3 collections, 1 expense and 5 ledger entries. All 39 business tables were copied, including historical assignments/status, categories, settings, salaries, loans, maintenance, reminders and any existing audit/history records; absent records were not invented.
+- Preflight verified matching columns and acyclic foreign keys. The source connection was loopback, repeatable-read and transaction-read-only. Neither source data/schema nor the VPS was changed. No application code or schema definition was changed for this request.
+- Paused only the verified project-owned HTTP preview. Created and archive-listed the prior development database backup in ignored `.local/backups/preview-before-real-copy-20261017T052726Z.dump`. This verified archive readability, not a full restore rehearsal. An ignored receipt records row counts and SHA-256 fingerprints, without embedding the business rows in Git.
+- Replaced only smartfleet_flask_dev contents inside one transaction, using foreign-key dependency order with existing triggers/constraints enabled. All 39 source/target table row counts and complete-row fingerprints matched before commit; deferred integrity checks passed. Sequence next values were preserved. Previous synthetic Flask command/audit rows were archived in the backup and removed from the refreshed preview so they cannot refer to reused business IDs.
+- Post-commit read-only comparison verified both source and preview still match all 39 exported table fingerprints. The separate test database remains synthetic: 4 buses, 0 drivers and 0 ledger entries. No test was run against the original business database.
+- Changed only the local development owner's password hash and ignored login note using the existing strong hash policy. Test credentials, production settings, trusted hosts, CSRF, authentication and loopback binding were not weakened. Restart invalidated earlier preview sessions.
+- Verification: new-password sign-in succeeded; 12 protected HTTP page checks returned 200; phone-sized Edge browser sign-in/cards/charts and the 3 real cashing bus options passed, without horizontal overflow or JavaScript errors. Screenshot inspected. No verification step created or edited a business transaction.
+- Verified the preview's October receipts, payments and balance reconcile to the copied source. Actual financial values remain in private local data/artifacts, not this published working record. Any future entry/edit made in this preview changes only its development copy; it is not automatically saved to the original business database. Recopying the original later would require preserving any preview-only work first.
+- Data, backups, one-off refresh helper, screenshots and credentials remain ignored. Only progress/operating documentation is changed in tracked files; no commit or push is part of this data/configuration request. Stages 5-7 and public/phone hosting remain pending.
+
+## Home Chart - Total Expenses Red Line
+
+Date: 17 October 2026. Owner requested all expenses combined on the Business performance chart, rather than operating costs alone.
+
+- Changed only the Flask timeline's red dataset to Total Expenses. It accumulates each outgoing financial ledger payment once across the selected chart dates, including repayments, salaries, drawings and fees. Internal TRANSFER movements remain excluded, matching the existing Total Expenses/Money Paid Out definition. Calculations remain Decimal until chart serialization.
+- Existing operating-cost services, bus profitability attribution, green revenue/blue balance lines, cards, financial records and database schema remain unchanged. The legacy Streamlit code is untouched. Existing documentation edits for the earlier data-copy request were preserved.
+- Tests using only smartfleet_flask_test: targeted reporting unit/PostgreSQL/phone-desktop browser suite **30 passed in 70.50s**. Includes Decimal fractions, all payment kinds, transfer/receipt exclusion, empty data, loan-versus-operating distinction and rendered red dataset. Separate follow-up **1 passed in 4.05s** verifies one month, three months and custom date totals while the current business balance stays unchanged.
+- Ruff lint/format and git diff --check passed. No dependencies changed. Refreshed only the verified loopback HTTP preview. A read-only live preview request confirmed the red line reconciles to the copied data's total payments and is labelled Total Expenses. No database write, commit, push or production access was performed for this chart change.
+
+## Stage 5 - Payroll, Loans, Owner Money and Requested UI Refinements
+
+Status: **PASSED**. Work remains on migration/flask; prior uncommitted chart/documentation changes are preserved in this stage's checkpoint. Usage began at 56% five-hour / 26% weekly and reached 89% / 32% at final verification.
+
+### Scope and implementation
+
+- Owner/CSRF-protected payroll/advance entry, salary preview, employment/payment history, FIFO recovery, deductions, zero-net salary, corrections/reclassification and confirmed reversal. Existing proration, advance limits and monthly uniqueness remain authoritative. Business-loan listing/creation, business/owner-personal principal repayment and fee handling, history/corrections; owner funding/drawings/repayments and liability summary.
+- New loan association links an unidentified repayment to a known loan under row locks and principal limits. It updates the relationship only, never creates another payment or changes the principal. The outer command stores actor/reason/before-after evidence atomically, as for all Stage 5 mutations. Unknown loan facts are not fabricated.
+- Reuses the durable command key, shared transaction and reference-data lock for retries/stale forms/concurrency. New money snapshots include employment, payroll, owner/loan and correction records; legacy correction evidence is retained. Reads of related money history share repeatable-read snapshots.
+- Isolated-only setup grants the new payroll/loan tables explicitly, correction_audit INSERT only, and owner_loans UPDATE(notes) solely to permit existing integrity-trigger row locking without opening identity/name/active edits. Initializes only missing Other/Owner Drawings categories. No business schema change, source/VPS connection or real financial entry.
+- Expense entry now starts with General / Bus Specific; only Bus Specific shows/requires a bus. Ordinary expenses and cashing resolve active Airtel Money server-side and ignore forged account choices; Paid from/Paid into controls removed. Cashing labels show registration only; selected-bus sections have individual 6px bordered cards in the same single form.
+- Driver editing is a button; bus status auto-submits its GET filter without Apply (noscript fallback retained). Recording shortcuts remain on Home and Finance General only, not Collections/Expenses/Balances. Account-management links are removed from More/Finance; Bus Accounts stays available. The old owner-only account compatibility URL/service remains for existing regression/financial compatibility, not as a restored navigation workflow.
+- More follows the latest Streamlit Quick actions / Management grouping and includes recording, fleet, driver money, loans, owner money, Bus Accounts, presets and obligations. The Stage 6 servicing/reminders/reports/backups/help buttons are present but explicitly disabled until those workflows migrate; no dead active links or false parity claim.
+
+### Diagnosis and safe recovery
+
+- First fixture error was an explicit ID in an ALWAYS identity owner account; changed only the synthetic fixture to use the database-generated ID.
+- A zero-net salary test exposed the existing service subtracting other deductions without creating required deduction allocations. Added exact deduction/allocation records and cancellation applied-status refresh; no constraint or trigger was changed. Initial unit/web regression: 122 passed. Legacy regression after the salary fix: 97 passed in 39.357s (read-only PGOPTIONS, live connection excluded).
+- Confirmed owner-payment privilege failure by reproducing the required SELECT FOR UPDATE on owner_loans. Added the narrowly scoped local notes-column privilege above. Owner drawing reversal's joined FOR UPDATE unnecessarily locked expense_categories; narrowed it to FOR UPDATE OF e rather than granting category mutations.
+- Loan principal and fees are separate existing records with no durable fee-to-repayment FK. Preserve the existing policy: principal reversal does not infer a fee association from free text/date or erase separately funded charges. UI says Reverse principal. Tests explicitly retain fees and resulting owner liability after a principal reversal. A safe unified finance-charge correction needs a separately reviewed exact-link design; no schema/policy invention here.
+
+### Verification evidence
+
+Focused PostgreSQL cases: **30 passed in 172.55s** after the diagnosed fixes, including a fresh-Python-process replay. Subsequent employment/proration and competing-repayment cases are included in the pending full suite rather than claimed in this earlier count. Expanded Edge phone/desktop journeys: **3 passed in 67.23s**, at 375x667,390x844,1366x900; screenshot reviewed. Final legacy regression after all service changes: **97 passed in 37.006s**, using read-only PGOPTIONS and excluding the live connection test.
+
+Installed-environment pip-audit: **no known vulnerabilities**; pip check: no broken requirements; Ruff lint and format check passed (**37 files formatted**). Generated-secret scan: **zero matches** across 249 tracked/unignored candidates against 11 private values. Full combined acceptance and reviewed checkpoint remain pending. No dependencies changed.
+
+### Final acceptance and remaining scope
+
+- Full combined command, workspace TEMP/TMP and SMARTFLEET_BROWSER_CHANNEL=msedge: `.venv-flask/Scripts/python.exe -m pytest tests/web tests/integration -q`: **293 passed in 866.16s (14:26)**. No required case was skipped/disabled. Includes owner/CSRF checks on every money action/reversal; real process restart replay; simultaneous retries and competing repayments; stale forms; audit and deferred-commit rollback; deductions/zero-net salary/cancellation; historical reclassification and loan association without duplicate cash; proration/employment dates; server-authoritative Airtel and bus scope; existing chart/schedule/fleet/financial regressions and all phone/desktop journeys.
+- Separate final Streamlit regression: **97 passed in 37.006s**, read-only PGOPTIONS and excluding only the unapproved live connection test. Earlier targeted counts overlap the full suite and are not additional distinct tests.
+- Final Ruff lint and format check passed (37 files); package consistency, installed-environment advisory audit, whitespace check and private-value scan passed. No new dependency or schema migration. No test was weakened to bypass an integrity failure; newly clarified principal/fee assertions follow the existing separately stored records and verify fees remain intact.
+- Verified project preview restarted only after executable/command/binding checks. New owner login and nine protected page requests passed; Home balance still reconciled with the copied business data. Browser screenshots reviewed; the preview remains http://127.0.0.1:5002, PC-only HTTP, with the existing local credentials. Automated writes were confined to smartfleet_flask_test; isolated setup changed only local writer permissions/reference categories. No original/VPS financial data or schema change.
+- Protected master and peeled streamlit-final remain 46c76438b53b12f7779b89d0e2e74f72c6eb0d4f. Stage 5 is eligible for its reviewed commit/push on migration/flask only; exact implementation hash will be recorded after publication.
+- Stop here. Stage 6 menu items remain disabled until their workflows migrate. The old account-management compatibility URL is not exposed in normal navigation. Separate finance-charge correction needs explicit linkage/policy review; principal reversals intentionally do not erase independent fees. Production activation, public/phone hosting and Stage 7 deployment work remain unauthorized/pending.

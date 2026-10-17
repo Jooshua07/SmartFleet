@@ -5,8 +5,9 @@
 <form method="post" class="edit-form">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="command_token" value="{{ command_token }}">
+  {% block extra_fields %}{% endblock %}
   {% for field in fields %}
-  {% if not field.get('group') %}
+  {% if not field.get('group') and field.name not in skip_fields|default([]) %}
   {% if field.type == 'checkbox' %}
     <label class="check-label"><input type="checkbox" name="{{ field.name }}" {% if field.value %}checked{% endif %}>{{ field.label }}</label>
   {% else %}

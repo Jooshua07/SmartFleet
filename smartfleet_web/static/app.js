@@ -11,6 +11,23 @@ function fitMetrics() {
 fitMetrics();
 window.addEventListener('resize', fitMetrics);
 
+document.querySelector('.filters [name="status"]')?.addEventListener('change', event => event.target.form.requestSubmit());
+
+const expenseScope = document.querySelector('.segmented [name="scope"]');
+if (expenseScope) {
+  const form = expenseScope.form;
+  const bus = form.querySelector('[name="bus_id"]');
+  function updateExpenseScope() {
+    const specific = form.querySelector('[name="scope"]:checked')?.value === 'BUS';
+    bus.hidden = !specific;
+    bus.disabled = !specific;
+    bus.required = specific;
+    form.querySelector('label[for="bus_id"]').hidden = !specific;
+  }
+  form.addEventListener('change', updateExpenseScope);
+  updateExpenseScope();
+}
+
 const periodPicker = document.querySelector('.period-picker');
 if (periodPicker) {
   function updatePeriod() {

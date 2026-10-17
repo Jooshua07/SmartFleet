@@ -883,7 +883,7 @@ def cancel_owner_drawing(expense_id: int, reason: str) -> dict:
                 JOIN expense_categories ec ON ec.id = e.category_id
                 WHERE e.id = %s
                   AND ec.name = 'Owner Drawings'
-                FOR UPDATE;
+                FOR UPDATE OF e;
                 """,
                 (expense_id,),
             )
@@ -918,6 +918,23 @@ def cancel_owner_drawing(expense_id: int, reason: str) -> dict:
                     (drawing["financial_transaction_id"],),
                 )
             return audit
+
+
+def associate_loan_repayment(repayment_id: int, loan_id: int) -> dict:
+    """Associate an unidentified principal payment without creating another cash movement."""
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cursor:
+            cursor.execute("SELECT * FROM loan_repayments WHERE id=%s FOR UPDATE", (repayment_id,))
+            repayment = cursor.fetchone()
+            if repayment is None or repayment["loan_id"] is not None:
+                raise ValueError("Choose an unidentified repayment.")
+            outstanding = _loan_outstanding(cursor, loan_id)
+            if repayment["amount"] > outstanding:
+                raise ValueError("Principal repayment cannot exceed outstanding loan principal.")
+            cursor.execute("UPDATE loan_repayments SET loan_id=%s WHERE id=%s RETURNING *", (loan_id, repayment_id))
+            result = cursor.fetchone()
+            _mark_loan_if_complete(cursor, loan_id)
+            return result
 
 
 def reclassify_expense_as_loan_repayment(

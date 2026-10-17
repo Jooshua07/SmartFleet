@@ -21,9 +21,7 @@ def test_cashing_and_expense_real_entry(stage2_server, width, height):
         page.goto(stage2_server + "/record-cashing?date=2026-10-08")
         assert page.locator("form.cashing-entry").count() == 1
         assert page.locator(".cashing-bus:visible").count() == 0
-        page.get_by_label("Buses", exact=True).select_option(
-            label=["DEMO101 | No driver", "DEMO102 | No driver"]
-        )
+        page.get_by_label("Buses", exact=True).select_option(label=["DEMO101", "DEMO102"])
         page.get_by_label("Adjust buses", exact=True).check()
         assert page.locator(".cashing-bus:visible").count() == 2
         page.get_by_label("Same normal amount for selected buses").check()

@@ -102,6 +102,10 @@ def test_home_general_cards_asof_excludes_future_and_account_openings(
     assert data["current"]["closing_balance"] == -3600
     assert data["series"][-1]["period_start"] == date(2026, 10, 17)
     assert data["series"][-1]["business_balance"] == -3600
+    assert data["series"][-1]["total_expenses"] == data["current"]["money_out"] == 7200
+    assert data["series"][-1]["operating_expenses"] == 6700
+    red = data["chart_data"]["timeline"]["datasets"][1]
+    assert red["label"] == "Total Expenses" and red["data"][-1] == 7200
     assert data["chart_data"]["bars"]["datasets"][1]["data"][0] == 6300
     client = login(stage2_app)
     response = client.get("/", base_url=BASE)
@@ -158,6 +162,23 @@ def test_account_balance_asof_keeps_opening_but_excludes_future(stage2_app, repo
     assert current_account["calculated_balance"] == 4400
     assert all_dates_account["calculated_balance"] == 11000
     assert all_dates_account["calculated_balance"] - current_account["calculated_balance"] == 6600
+
+
+def test_total_expense_line_tracks_selected_dates_without_changing_balance(
+    stage2_app, reporting_data, monkeypatch
+):
+    monkeypatch.setattr("smartfleet_web.reporting.today_lusaka", lambda: date(2026, 12, 31))
+    cases = [
+        ({"period": "1m"}, 900),
+        ({"period": "3m"}, 8600),
+        ({"period": "custom", "custom": "dates", "start": "2026-10-01", "end": "2026-10-10"}, 6700),
+    ]
+    with stage2_app.app_context():
+        for args, expected in cases:
+            data = load_report(args, "home")
+            assert data["chart_data"]["timeline"]["datasets"][1]["data"][-1] == expected
+            assert data["selected"]["money_out"] == expected
+            assert data["current"]["closing_balance"] == 3000
 
 
 @pytest.mark.parametrize(

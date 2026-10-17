@@ -1,6 +1,8 @@
 """Read-only, consistent-snapshot views using existing financial services."""
 
+from bisect import bisect_left
 from datetime import date
+from decimal import Decimal
 
 from flask import current_app, render_template, request
 from psycopg.rows import dict_row
@@ -94,6 +96,9 @@ def load_report(args, screen="home", bus_id=None):
                 series.append(
                     {**series[-1], "period_start": end, "period_end": end, "period_end_point": True}
                 )
+            series = with_total_expenses(
+                series, finance_service.get_period_ledger(max(start, baseline), end)
+            )
             result["series"] = series
             result["chart_data"] = {
                 "timeline": {
@@ -107,7 +112,7 @@ def load_report(args, screen="home", bus_id=None):
                         }
                         for key, label, color in [
                             ("revenue", "Revenue", "#187454"),
-                            ("operating_expenses", "Operating costs", "#c34b50"),
+                            ("total_expenses", "Total Expenses", "#c34b50"),
                             ("business_balance", "Business balance", "#1479f6"),
                         ]
                     ],
@@ -146,6 +151,22 @@ def load_report(args, screen="home", bus_id=None):
             result["chart_data"] = {
                 "bars": bar_data(result["fleet"]["buses"], "registration_number")
             }
+    return result
+
+
+def with_total_expenses(series, ledger):
+    dates = [point["period_start"] for point in series]
+    buckets = [Decimal("0") for _ in series]
+    for row in ledger:
+        if row["direction"] == "OUT" and row["transaction_type"] != "TRANSFER":
+            index = bisect_left(dates, row["transaction_date"])
+            if index < len(buckets):
+                buckets[index] += row["amount"]
+    total = Decimal("0")
+    result = []
+    for point, amount in zip(series, buckets, strict=True):
+        total += amount
+        result.append({**point, "total_expenses": total})
     return result
 
 

@@ -7,7 +7,7 @@
   <div class="search-row"><input id="search" type="search" name="search" value="{{ search }}" maxlength="100" placeholder="Registration or route"><button type="submit" class="icon-button" aria-label="Search" title="Search"><i data-lucide="search" aria-hidden="true"></i></button></div>
   <label for="status">Status</label>
   <select id="status" name="status"><option value="">All buses</option><option value="ACTIVE" {% if status == 'ACTIVE' %}selected{% endif %}>Active</option><option value="INACTIVE" {% if status == 'INACTIVE' %}selected{% endif %}>Deactivated</option></select>
-  <button class="filter-button" type="submit"><i data-lucide="list-filter" aria-hidden="true"></i>Apply</button>
+  <noscript><button type="submit">Apply</button></noscript>
 </form>
 <div class="bus-list" aria-label="Bus records">
 {% for bus in buses %}

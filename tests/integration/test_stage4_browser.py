@@ -31,6 +31,7 @@ def test_dashboard_charts_balances_tabs_and_periods(stage2_server, reporting_dat
         chart = page.evaluate("""() => {
             const b=Chart.getChart('bars'), l=Chart.getChart('timeline');
             return {cost:b.data.datasets[1].data[0], min:b.scales.y.min,
+                expenseLabel:l.data.datasets[1].label, totalExpenses:l.data.datasets[1].data.at(-1),
                 bases:b.data.datasets.map((_,i)=>b.getDatasetMeta(i).data[0].base),
                 zero:b.scales.y.getPixelForValue(0),negative:l.scales.y.min,
                 expenseTop:b.getDatasetMeta(1).data[0].y,
@@ -38,6 +39,7 @@ def test_dashboard_charts_balances_tabs_and_periods(stage2_server, reporting_dat
                 pixels:[...b.ctx.getImageData(0,0,b.width,b.height).data].filter((v,i)=>i%4===3 && v>0).length};
         }""")
         assert chart["cost"] == 6300 and chart["min"] == 0
+        assert chart["expenseLabel"] == "Total Expenses" and chart["totalExpenses"] == 7200
         assert all(abs(v - chart["zero"]) < 1 for v in chart["bases"])
         assert chart["expenseTop"] < chart["revenueTop"] < chart["zero"]
         assert chart["negative"] < 0 and chart["pixels"] > 1000

@@ -5,7 +5,7 @@
 {% for row in rows %}
 <article class="register-row"><h2>{{ row.name if kind == 'route-new' else row.full_name }}</h2>
 {% if kind == 'route-new' %}<p>{{ row.description or '' }}</p><span class="bus-meta">{{ 'Active' if row.active else 'Inactive' }}</span>
-{% else %}<p>{{ row.phone or '' }}{% if row.assigned_bus %} | {{ row.assigned_bus }}{% endif %}</p><span class="bus-meta">{{ row.employment_status or 'No active employment' }}</span><a class="record-link" href="{{ url_for('management.edit', kind='driver-edit', record_id=row.id) }}"><i data-lucide="pencil" aria-hidden="true"></i>Edit driver</a>{% endif %}
+{% else %}<p>{{ row.phone or '' }}{% if row.assigned_bus %} | {{ row.assigned_bus }}{% endif %}</p><span class="bus-meta">{{ row.employment_status or 'No active employment' }}</span><a class="button secondary" href="{{ url_for('management.edit', kind='driver-edit', record_id=row.id) }}"><i data-lucide="pencil" aria-hidden="true"></i>Edit driver</a>{% endif %}
 </article>
 {% else %}<p class="empty-state">No records.</p>{% endfor %}
 </div>

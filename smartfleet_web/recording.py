@@ -39,6 +39,16 @@ def state(connection):
     return snapshot(connection, COMMAND_TABLES)
 
 
+def airtel_account_id():
+    with get_connection() as connection:
+        row = connection.execute(
+            "SELECT id FROM financial_accounts WHERE active AND account_type='AIRTEL_MONEY' ORDER BY id LIMIT 1"
+        ).fetchone()
+    if row is None:
+        raise ValueError("No active Airtel Money account is configured.")
+    return row[0]
+
+
 def token_for(action):
     if request.method == "POST":
         return request.form.get("command_token", "")
@@ -156,12 +166,6 @@ def expense(record_id):
             [("", "No bus")] + [(str(r["id"]), r["registration_number"]) for r in buses],
             required=False,
         ),
-        field(
-            "financial_account_id",
-            "Paid from",
-            "select",
-            [(str(r["id"]), r["name"]) for r in cashing_service.get_active_financial_accounts()],
-        ),
         field("amount", "Amount (K)", "money"),
         field("description", "Expense title"),
         field("vendor_name", "Paid to", required=False),
@@ -187,9 +191,9 @@ def expense(record_id):
                 category_id=positive_id(data, "category_id"),
                 amount=amount,
                 description=data["description"],
-                financial_account_id=positive_id(data, "financial_account_id"),
+                financial_account_id=airtel_account_id(),
                 scope=data["scope"],
-                bus_id=positive_id(data, "bus_id", optional=True),
+                bus_id=positive_id(data, "bus_id") if data["scope"] == "BUS" else None,
                 vendor_name=data["vendor_name"],
                 reference_number=data["reference_number"],
                 notes=data["notes"],
@@ -213,7 +217,7 @@ def expense(record_id):
         elif item["name"] in existing:
             item["value"] = existing[item["name"]] if existing[item["name"]] is not None else ""
     return render_template(
-        "manage_form.html",
+        "expense_form.html",
         title="Edit expense" if record_id else "Record Expense",
         active="finance",
         fields=fields,
@@ -221,6 +225,9 @@ def expense(record_id):
         error=error,
         reason=request.form.get("reason", ""),
         cancel_url="/expenses",
+        expense_scope=data.get("scope", "GENERAL")
+        if request.method == "POST"
+        else existing.get("scope", request.args.get("scope", "GENERAL")),
     ), status
 
 
@@ -389,6 +396,7 @@ def collection(record_id):
     # Transport tokens vary across owner sessions and are not part of the financial intent.
     data.pop("csrf_token", None)
     data.pop("command_token", None)
+    data.pop("financial_account_id", None)
     action, error, status = f"collection:{record_id}", None, 200
     token = token_for(action)
     preview, rules = None, []
@@ -432,7 +440,7 @@ def collection(record_id):
             def save():
                 fresh, effective_rules = (preview, rules) if direct else cashing_preview(on_date)
                 allocation = allocations(data, fresh, direct)
-                account_id = positive_id(data, "financial_account_id")
+                account_id = airtel_account_id()
                 if direct:
                     return cashing_service.update_direct_cashing_collection(
                         record_id, on_date, account_id, allocation["entries"], data.get("notes")
@@ -459,13 +467,6 @@ def collection(record_id):
             return redirect(url_for("recording.collection", date=on_date.isoformat()), code=303)
     except (ValueError, psycopg.IntegrityError, psycopg.DataError) as exc:
         error, status = safe_error(exc)
-    accounts = [
-        r
-        for r in cashing_service.get_active_financial_accounts()
-        if r["account_type"] == "AIRTEL_MONEY"
-    ]
-    if request.method == "GET" and existing:
-        data["financial_account_id"] = str(existing["collection"]["financial_account_id"])
     return render_template(
         "record_cashing.html",
         title="Edit cashing" if record_id else "Record Cashing",
@@ -474,7 +475,6 @@ def collection(record_id):
         data=data,
         command_token=token,
         error=error,
-        accounts=accounts,
         direct=direct,
         classifications=sorted(cashing.DIFFERENCE_CLASSIFICATIONS),
     ), status if request.method == "POST" else 200

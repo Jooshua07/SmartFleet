@@ -63,7 +63,9 @@ def test_fleet_account_and_schedule_journey(stage2_server, width, height):
         page.get_by_role("navigation", name="Main navigation").get_by_role(
             "link", name="More", exact=True
         ).click()
-        page.get_by_role("link", name="Accounts", exact=True).click()
+        assert page.get_by_role("link", name="Accounts", exact=True).count() == 0
+        # The owner-only compatibility URL remains tested, but is no longer a menu action.
+        page.goto(stage2_server + "/accounts")
         cash = page.locator(".register-row").filter(
             has=page.get_by_role("heading", name="Cash", exact=True)
         )

@@ -64,7 +64,8 @@ def test_owner_phone_and_desktop_journey(live_server, width, height):
         assert page.locator(".bus-card").count() == 1
         page.get_by_label("Search buses").fill("")
         page.get_by_label("Status", exact=True).select_option("INACTIVE")
-        page.get_by_role("button", name="Apply", exact=True).click()
+        page.wait_for_url("**/buses?**status=INACTIVE")
+        assert page.get_by_role("button", name="Apply", exact=True).count() == 0
         assert page.get_by_role("heading", name="DEMO103").is_visible()
         page.get_by_role("navigation", name="Main navigation").get_by_role(
             "link", name="Buses", exact=True

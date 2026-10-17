@@ -46,6 +46,7 @@ def isolated_app(isolated_config):
 @pytest.fixture
 def stage2_database(isolated_config):
     from smartfleet_web.management import TABLES, snapshot
+    from smartfleet_web.money import MONEY_TABLES
     from smartfleet_web.recording import FINANCIAL_TABLES
 
     env = dotenv_values(ROOT / ".env.flask.test.local")
@@ -66,6 +67,7 @@ def stage2_database(isolated_config):
             [
                 *(table for group in TABLES.values() for table in group),
                 *FINANCIAL_TABLES,
+                *MONEY_TABLES,
                 "expense_categories",
                 "loan_repayments",
                 "transfers",
@@ -81,17 +83,23 @@ def stage2_database(isolated_config):
     yield owner, writer
     # Restore only changes made to this isolated synthetic test fixture; never reset a database.
     order = [
+        "correction_audit",
         "salary_advance_recoveries",
         "salary_deduction_allocations",
         "driver_salaries",
+        "driver_advances",
+        "driver_deductions",
+        "loan_repayments",
+        "owner_loan_transactions",
         "cashing_obligation_payments",
         "cashing_obligations",
         "remittances",
         "remittance_collections",
         "expense_allocations",
         "expenses",
-        "loan_repayments",
         "financial_transactions",
+        "business_loans",
+        "owner_loans",
         "transfers",
         "expense_categories",
         "bus_documents",

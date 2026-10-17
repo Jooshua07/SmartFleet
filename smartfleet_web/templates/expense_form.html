@@ -1,0 +1,7 @@
+{% extends 'manage_form.html' %}
+{% set skip_fields=['scope'] %}
+{% block extra_fields %}
+<fieldset class="segmented"><legend class="sr-only">Expense scope</legend>
+{% for value,label in [('GENERAL','General'),('BUS','Bus Specific')] %}<label><input type="radio" name="scope" value="{{ value }}" {% if expense_scope==value %}checked{% endif %}>{{ label }}</label>{% endfor %}
+</fieldset>
+{% endblock %}

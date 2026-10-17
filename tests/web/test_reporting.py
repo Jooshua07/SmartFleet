@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from smartfleet_web.reporting import bar_data, choose_period
+from smartfleet_web.reporting import bar_data, choose_period, with_total_expenses
 
 
 @pytest.mark.parametrize(
@@ -58,3 +58,45 @@ def test_all_time_with_only_future_records_does_not_reverse_the_period():
         date(2026, 10, 17),
         date(2026, 11, 5),
     ) == (date(2026, 10, 1), date(2026, 10, 17))
+
+
+@pytest.mark.parametrize(
+    "kind", ["EXPENSE", "DRIVER_SALARY", "LOAN_REPAYMENT", "OWNER_DRAWING", "TRANSFER_FEE", "OTHER"]
+)
+def test_total_expense_line_includes_every_outgoing_payment(kind):
+    series = [{"period_start": date(2026, 10, 4)}, {"period_start": date(2026, 10, 8)}]
+    ledger = [
+        {
+            "transaction_date": date(2026, 10, 1),
+            "transaction_type": kind,
+            "direction": "OUT",
+            "amount": Decimal("4000.25"),
+        },
+        {
+            "transaction_date": date(2026, 10, 6),
+            "transaction_type": kind,
+            "direction": "OUT",
+            "amount": Decimal("100.50"),
+        },
+        {
+            "transaction_date": date(2026, 10, 6),
+            "transaction_type": "TRANSFER",
+            "direction": "OUT",
+            "amount": Decimal("999"),
+        },
+        {
+            "transaction_date": date(2026, 10, 6),
+            "transaction_type": "OTHER",
+            "direction": "IN",
+            "amount": Decimal("500"),
+        },
+    ]
+    result = with_total_expenses(series, ledger)
+    assert [point["total_expenses"] for point in result] == [Decimal("4000.25"), Decimal("4100.75")]
+    assert "total_expenses" not in series[0]
+
+
+def test_total_expense_line_with_no_payments_or_points():
+    series = [{"period_start": date(2026, 10, 4)}]
+    assert with_total_expenses(series, [])[0]["total_expenses"] == Decimal("0")
+    assert with_total_expenses([], []) == []
