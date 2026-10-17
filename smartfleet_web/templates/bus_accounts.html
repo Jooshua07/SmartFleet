@@ -1,0 +1,9 @@
+{% extends 'base.html' %}{% from 'report_macros.html' import metric,chart,bus_table with context %}
+{% block content %}<div class="page-title"><h1>{{ detail.bus.registration_number if detail is defined else 'Bus Accounts' }}</h1></div>
+{% include 'period_picker.html' %}
+{% if detail is defined %}<div class="metrics">{{ metric('Recorded Revenue',bus_summary.recorded_revenue) }}{{ metric('Attributed Costs',bus_summary.attributed_costs) }}{{ metric('Contribution',bus_summary.recorded_contribution) }}</div>
+<div id="chart-data" data-charts='{{ chart_data|tojson }}'></div>{{ chart('bars','Monthly bus performance') }}
+<section class="history"><h2>Costs by category</h2>{% for row in detail.costs_by_category %}<p>{{ row.category_name }} | K {{ '{:,.2f}'.format(row.amount) }}</p>{% else %}<p>No attributed costs.</p>{% endfor %}</section>
+<section class="history"><h2>Recent activity</h2>{% for row in detail.recent_transactions %}<p>{{ row.transaction_date }} | {{ row.title }} | K {{ row.amount }}</p>{% else %}<p>No activity.</p>{% endfor %}</section>
+{% else %}<div id="chart-data" data-charts='{{ chart_data|tojson }}'></div>{{ chart('bars','Bus revenue vs attributed costs') }}{{ bus_table(fleet.buses) }}<section class="history"><h2>Shared/general costs</h2><p>K {{ '{:,.2f}'.format(fleet.shared_general_costs) }}</p></section>{% endif %}
+{% endblock %}

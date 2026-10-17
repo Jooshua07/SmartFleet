@@ -67,6 +67,11 @@ def stage2_database(isolated_config):
                 *(table for group in TABLES.values() for table in group),
                 *FINANCIAL_TABLES,
                 "expense_categories",
+                "loan_repayments",
+                "transfers",
+                "driver_salaries",
+                "salary_advance_recoveries",
+                "salary_deduction_allocations",
             ]
         )
     )
@@ -76,13 +81,18 @@ def stage2_database(isolated_config):
     yield owner, writer
     # Restore only changes made to this isolated synthetic test fixture; never reset a database.
     order = [
+        "salary_advance_recoveries",
+        "salary_deduction_allocations",
+        "driver_salaries",
         "cashing_obligation_payments",
         "cashing_obligations",
         "remittances",
         "remittance_collections",
         "expense_allocations",
         "expenses",
+        "loan_repayments",
         "financial_transactions",
+        "transfers",
         "expense_categories",
         "bus_documents",
         "driver_assignments",

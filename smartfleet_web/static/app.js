@@ -1,6 +1,27 @@
 "use strict";
 if (window.lucide) window.lucide.createIcons();
 
+function fitMetrics() {
+  document.querySelectorAll('.metric-value').forEach(element => {
+    let size = 22;
+    element.style.fontSize = size + 'px';
+    while (element.scrollWidth > element.clientWidth && size > 11) element.style.fontSize = (--size) + 'px';
+  });
+}
+fitMetrics();
+window.addEventListener('resize', fitMetrics);
+
+const periodPicker = document.querySelector('.period-picker');
+if (periodPicker) {
+  function updatePeriod() {
+    const custom = periodPicker.querySelector('[name="period"]:checked')?.value === 'custom';
+    periodPicker.querySelector('[data-custom-period]').hidden = !custom;
+    periodPicker.querySelector('[data-custom-dates]').hidden = !custom || periodPicker.querySelector('[name="custom"]').value !== 'dates';
+  }
+  periodPicker.addEventListener('change', updatePeriod);
+  updatePeriod();
+}
+
 const cashingForm = document.querySelector('.cashing-entry');
 if (cashingForm) {
   document.querySelector('#load-cashing-date').addEventListener('click', () => {

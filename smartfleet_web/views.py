@@ -9,7 +9,9 @@ bp = Blueprint("home", __name__)
 @bp.get("/")
 @owner_required
 def index():
-    return render_template("home.html", title="Home", active="home")
+    from smartfleet_web.reporting import show
+
+    return show("home")
 
 
 @bp.get("/buses")
@@ -41,7 +43,18 @@ def buses():
 @bp.get("/finance")
 @owner_required
 def finance():
-    return render_template("finance.html", title="Finance", active="finance")
+    from smartfleet_web.reporting import show
+
+    return show("finance")
+
+
+@bp.get("/bus-accounts", defaults={"bus_id": None})
+@bp.get("/bus-accounts/<int:bus_id>")
+@owner_required
+def bus_accounts(bus_id):
+    from smartfleet_web.reporting import show
+
+    return show("bus-accounts", bus_id)
 
 
 @bp.get("/more")

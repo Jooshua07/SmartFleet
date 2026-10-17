@@ -26,7 +26,10 @@ def login(client, username="test-owner", password=None, suffix=""):
     )
 
 
-@pytest.mark.parametrize("path", ["/", "/buses", "/finance", "/more", "/health/ready"])
+@pytest.mark.parametrize(
+    "path",
+    ["/", "/buses", "/finance", "/more", "/health/ready", "/bus-accounts", "/bus-accounts/1"],
+)
 def test_protected_pages_do_not_query_without_login(client, path):
     with patch("smartfleet_web.views.get_all_buses") as query:
         response = client.get(path)
@@ -36,9 +39,12 @@ def test_protected_pages_do_not_query_without_login(client, path):
 
 
 @pytest.mark.parametrize("path", ["/", "/buses", "/finance", "/more"])
-def test_authenticated_navigation(client, path):
+def test_authenticated_navigation(client, path, empty_report):
     assert login(client).status_code == 303
-    with patch("smartfleet_web.views.get_all_buses", return_value=[]):
+    with (
+        patch("smartfleet_web.views.get_all_buses", return_value=[]),
+        patch("smartfleet_web.reporting.load_report", return_value=empty_report),
+    ):
         response = client.get(path)
     assert response.status_code == 200
     for label in (b"Home", b"Buses", b"Finance", b"More"):

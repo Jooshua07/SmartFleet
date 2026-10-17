@@ -1,4 +1,6 @@
 import secrets
+from datetime import date
+from decimal import Decimal
 
 import pytest
 from werkzeug.security import generate_password_hash
@@ -39,3 +41,30 @@ def app(app_config):
 @pytest.fixture
 def client(app):
     return app.test_client()
+
+
+@pytest.fixture
+def empty_report():
+    totals = {
+        key: Decimal("0") for key in ("money_in", "money_out", "closing_balance", "other_payments")
+    }
+    totals["other_payment_breakdown"] = {}
+    return dict(
+        start=date(2026, 10, 1),
+        end=date(2026, 10, 17),
+        today=date(2026, 10, 17),
+        baseline=date(2026, 10, 1),
+        current=totals,
+        selected=totals,
+        operating={"revenue": Decimal("0"), "expenses": Decimal("0")},
+        counts={"ACTIVE": 0, "INACTIVE": 0},
+        fleet={"buses": [], "shared_general_costs": Decimal("0")},
+        chart_data={},
+        series=[],
+        period_mode="1m",
+        custom_mode="all",
+        section="general",
+        rows=[],
+        page=1,
+        has_next=False,
+    )

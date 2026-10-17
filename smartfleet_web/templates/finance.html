@@ -1,6 +1,0 @@
-{% extends 'base.html' %}
-{% block content %}
-<div class="link-list">{% for label,path in [('Record Cashing','/record-cashing'),('Record Expense','/record-expense'),('Collections','/collections'),('Expenses','/expenses'),('Unpaid obligations','/obligations'),('Accounts','/accounts')] %}<a href="{{ path }}"><span>{{ label }}</span><i data-lucide="chevron-right" aria-hidden="true"></i></a>{% endfor %}</div>
-<div class="page-title"><div><p class="eyebrow">BUSINESS MONEY</p><h1>Finance</h1></div><i data-lucide="wallet" aria-hidden="true"></i></div>
-<div class="empty-state"><i data-lucide="receipt-text" aria-hidden="true"></i><h2>No entries to display</h2></div>
-{% endblock %}

@@ -150,3 +150,41 @@ Status: **PASSED**. Resumed from clean migration/flask at 69d144f; the interrupt
 7. Full verification, CI and deployment preparation; no production activation.
 
 Do not advance past a failing or unavailable mandatory gate.
+
+## Stage 4 - Dashboard, Finance and Bus Accounts
+
+Stage 3 implementation checkpoint: **3ba7031e46de8f18b8023278c3144f108aa67959**, committed and successfully pushed before Stage 4 began.
+
+### Implemented
+
+- Home's baseline-to-today Total Revenue, Total Expenses and Business Balance cards, quick recording links, fleet counts, servicing alerts/reminders, recent activity, performance timeline and bus comparison. Home reporting controls remain in the scrolling body; header and four main navigation destinations remain fixed.
+- Fixed Finance General/Collections/Expenses/Balances tabs, paginated histories and correction links. Business Balance Now is above and independent of the selected-period Money Received/Money Paid Out section. Opening/closing balances remain in reusable report services for the later Reports workflow.
+- Calendar one-month/three-month selectors and Custom all-time/six-month/date ranges; malformed/reversed/overlong ranges reject safely. Explicit future custom reporting does not alter balances labelled current. All sections share a read-only repeatable-read transaction; no cross-request financial caching.
+- Reconciled Bus Accounts summary, monthly detail, category costs and recent activity, using the existing operating-category exclusions, historical multi-bus allocations and uniquely attributable earned salaries. General/unattributed salary stays shared; financing and loan repayments are not bus operating costs. Existing Streamlit entry points remain operational.
+- Actual-currency grouped bars start independently at zero; negative business balance remains visible on the timeline. Locally vendored MIT Chart.js 4.5.1 avoids a frontend framework/build/runtime or remote chart dependency. Official asset source/version/license/hash is recorded in FLASK_DEVELOPMENT.md. Numeric conversion to float is presentation-only; services/SQL retain Decimal/numeric calculations.
+- Individual account balances now accept an optional as-of date; Flask uses today while legacy default behavior is preserved. Consolidated reporting retains the October zero clean slate and does not add account starting balances.
+- Removed only unused Flask Home/Finance shell templates after verifying no references; no Streamlit page or production data/schema was removed or changed.
+
+### Verification evidence
+
+- Initial PostgreSQL reporting cases: **8 passed in 33.08s**, covering October/November/December carry-forward, three-month aggregation, future exclusion, account-opening exclusion, loan/transfer exclusion, salary/shared/multi-bus reconciliation and read-only rendering.
+- Initial Stage 4 real Edge browser journeys: **3 passed in 41.73s**, at 375x667, 390x844 and 1366x900. Asserted actual chart data, independent zero-baseline pixels, larger expense bar, negative line range, nonblank canvas, fixed header/tabs/navigation, custom dates and invariant current balance. Phone screenshot visually reviewed. Additional Bus Accounts navigation and account-as-of cases are being checked before final acceptance.
+- Installed-environment dependency audit: **No known vulnerabilities found**. Package consistency passed. Generated-secret scan: **zero matches** across 241 tracked/unignored candidates against 11 private values. Ruff lint passed; a newly expanded test parametrization required formatting and was formatted without changing assertions.
+- Usage during verification: 43% five-hour, 24% weekly. Full combined regression and final checkpoint are not claimed until results below are complete.
+
+### Final acceptance
+
+Status: **PASSED**.
+
+- Full combined command with workspace-local TEMP/TMP and SMARTFLEET_BROWSER_CHANNEL=msedge: `.venv-flask/Scripts/python.exe -m pytest tests/web tests/integration -q`: **194 passed in 483.95s**. Includes the Stage 1-3 database/authorization/CSRF/concurrency/restart/retry/rollback gates and all existing browser journeys plus Stage 4 reporting.
+- Final follow-up after adding account-as-of, future-only all-time, Bus Accounts authorization and actual summary-to-detail browser navigation: `.venv-flask/Scripts/python.exe -m pytest tests/web tests/integration/test_stage4.py tests/integration/test_stage4_browser.py -q`: **127 passed in 90.10s**. These overlap the combined run; they are not 127 additional distinct tests. All final changed behaviors were exercised. No required case was skipped, deleted, disabled or weakened.
+- Legacy Streamlit unittest/AppTest regression, workspace TEMP/TMP and read-only PGOPTIONS, excluding only the unapproved live connection test: **97 passed in 26.606s**. Expected missing Streamlit context warnings only.
+- Ruff check passed; Ruff format check: **32 files already formatted**. pip check: no broken requirements. Installed Python dependency audit: no known vulnerabilities. Separate OSV package/version lookup for npm/chart.js 4.5.1: **zero known advisories**; official asset SHA-256 reverified. Browser/data/pixel checks and phone/desktop screenshots passed review. The vendor advisory check is separate from pip-audit, not implied by it.
+- Restarted only the verified project-owned process for port 5002 after checking its executable path and full launcher command. Listener remains **127.0.0.1:5002**. Live HTTP owner login, health and **13 protected page requests returned 200**, including Home, all four Finance sections, Bus Accounts, recording, accounts and obligations. No financial write was made by that smoke test.
+- master and peeled streamlit-final remain **46c76438b53b12f7779b89d0e2e74f72c6eb0d4f**. Only migration/flask changes are eligible for the Stage 4 checkpoint. No production/VPS/source database access or change; test writes remained isolated/synthetic. Exact implementation checkpoint will be recorded after the commit exists.
+
+### Remaining scope and limitations
+
+- Stop after this stage. Stage 5: payroll, business loans and owner-money screens. Stage 6: servicing, reminders, reports/exports, isolated backups, help and remaining parity. Stage 7: full parity verification, CI and deployment preparation, not production activation.
+- Home alerts/reminders read the existing services; their editing workflows are not claimed as migrated. Report exports and opening/closing-balance report screens remain Stage 6. No real financial history has been imported into this private preview.
+- Single-process owner sessions, bounded command snapshots and production isolation restrictions documented above remain. No production-ready or full-parity claim is made. The preview link is PC-only HTTP, not a phone/public link.

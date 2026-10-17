@@ -1,0 +1,7 @@
+<form method="get" class="period-picker" aria-label="Reporting period">
+{% if section is defined %}<input type="hidden" name="view" value="{{ section }}">{% endif %}
+<fieldset class="mode-picker"><legend>Reporting period (calendar)</legend>{% for value,label in [('1m','1 month'),('3m','3 months'),('custom','Custom')] %}<label class="check-label"><input type="radio" name="period" value="{{ value }}" {% if period_mode==value %}checked{% endif %}>{{ label }}</label>{% endfor %}</fieldset>
+<div data-custom-period><label for="custom">Custom period</label><select id="custom" name="custom">{% for value,label in [('all','All time'),('6m','6 months'),('dates','Choose dates')] %}<option value="{{ value }}" {% if custom_mode==value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+<div class="date-pair" data-custom-dates><div><label for="start">Start date</label><input id="start" name="start" type="date" value="{{ start }}"></div><div><label for="end">End date</label><input id="end" name="end" type="date" value="{{ end }}"></div></div></div>
+<button class="secondary" type="submit"><i data-lucide="calendar-range" aria-hidden="true"></i>Apply period</button><p class="bus-meta">{{ start }} to {{ end }}</p>
+</form>

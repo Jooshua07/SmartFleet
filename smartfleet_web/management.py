@@ -524,7 +524,7 @@ def accounts():
         "accounts.html",
         title="Accounts",
         active="finance",
-        accounts=account_service.get_accounts_for_management(),
+        accounts=account_service.get_accounts_for_management(today_lusaka()),
     )
 
 

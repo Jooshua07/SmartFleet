@@ -1,0 +1,17 @@
+{% extends 'base.html' %}{% from 'report_macros.html' import metric,chart,bus_table with context %}
+{% block content %}
+<div class="page-title"><h1>Home</h1></div>
+<div class="metrics">{{ metric('Total Revenue',current.money_in) }}{{ metric('Total Expenses',current.money_out) }}{{ metric('Business Balance',current.closing_balance) }}</div>
+<p class="bus-meta">{{ baseline }} to {{ today }}</p>
+<div class="quick-actions"><a class="button secondary" href="/record-cashing"><i data-lucide="hand-coins" aria-hidden="true"></i>Record Cashing</a><a class="button secondary" href="/record-expense"><i data-lucide="receipt" aria-hidden="true"></i>Record Expense</a></div>
+<p class="fleet-counts">{{ counts.ACTIVE }} active buses <span>|</span> {{ counts.INACTIVE }} deactivated</p>
+{% for warning in setup_warnings|default([]) %}<p class="notice">{{ warning }}</p>{% endfor %}
+{% include 'period_picker.html' %}
+<div id="chart-data" data-charts='{{ chart_data|tojson }}'></div>
+{{ chart('timeline','Business performance') }}
+{{ chart('bars','Bus revenue vs attributed costs') }}
+{{ bus_table(fleet.buses) }}
+<a class="record-link" href="/bus-accounts">Bus Accounts<i data-lucide="chevron-right" aria-hidden="true"></i></a>
+<section class="history"><h2>Alerts and reminders</h2>{% for row in servicing_alerts|default([]) %}<p>{{ row.registration_number }} | {{ row.next_due_date }} | {{ row.level }}</p>{% endfor %}{% for row in reminders|default([]) %}<p>{{ row.title }} | {{ row.due_date }}</p>{% else %}<p class="bus-meta">No pending reminders.</p>{% endfor %}</section>
+<section class="history"><h2>Recent Activity</h2>{% for row in activity|default([]) %}<article class="register-row"><h2>{{ row.description or 'Business transaction' }}</h2><p>{{ row.transaction_date }} | K {{ row.amount }}</p></article>{% else %}<p class="bus-meta">No recorded activity yet.</p>{% endfor %}</section>
+{% endblock %}

@@ -63,6 +63,16 @@ The initial in-memory owner-session registry is deliberately single-process: res
 
 The shared database connection has a context-local settings override for Flask, with mandatory isolated DB/role validation and read-only/timeouts. Existing Streamlit calls keep their legacy environment behavior. No Flask request falls back to the Streamlit database credentials.
 
+## Stage 4 dashboards and reporting
+
+Home now shows baseline-to-today Total Revenue, Total Expenses and Business Balance, with calendar reporting controls in the scrolling body. Finance retains fixed General, Collections, Expenses and Balances tabs. On Balances, Business Balance Now remains outside the period filter; Money Received and Money Paid Out use the displayed selected dates. One month/three months are calendar periods; Custom offers all available baseline activity, six months or explicit dates. Opening/closing figures remain service/reporting concepts, not additional Balances cards.
+
+All sections of a report share a read-only repeatable-read PostgreSQL snapshot. Current balances exclude future ledger entries and consolidated balances retain the existing zero reporting baseline, separate from individual account starting balances. Account management also excludes future transactions from balances shown now. Explicit future custom report periods do not change the current balance.
+
+Bus Accounts detail uses the same operating-category exclusions, exact multi-bus allocations and uniquely attributable earned driver salaries as its summary. Shared/general costs remain separate. Loan repayments, owner financing and internal transfers are not repurposed as bus operating costs. Existing attribution policy is retained rather than allocating shared costs arbitrarily.
+
+Charts use locally vendored Chart.js 4.5.1 (MIT license in static/vendor/CHARTJS-LICENSE), not a remote runtime dependency. The official npm package asset was fetched over verified HTTPS from jsDelivr; SHA-256: 48444a82d4edcb5bec0f1965faacdde18d9c17db3063d042abada2f705c9f54a. Grouped bars use actual currency units and independent zero baselines; the business-balance line permits negative values. No Node build or server runtime is required. Chart data is numeric/JSON-escaped and the existing self-only content security policy is retained.
+
 ## Regression environments and safety
 
 The Flask pytest target paths cover new web/integration tests. Legacy Streamlit unittest/AppTest regressions remain in their original files/environment; they are **not replaced or counted as passing by pytest defaults**. Run them separately with read-only PostgreSQL options, excluding the live connection test when not explicitly approved. Record exact counts in the progress document.

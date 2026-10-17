@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
   <script defer src="{{ url_for('static', filename='vendor/lucide.min.js') }}"></script>
   <script defer src="{{ url_for('static', filename='app.js') }}"></script>
+  {% if chart_data is defined %}<script defer src="{{ url_for('static',filename='vendor/chart.umd.min.js') }}"></script><script defer src="{{ url_for('static',filename='charts.js') }}"></script>{% endif %}
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -21,7 +22,7 @@
     <nav class="section-tabs" aria-label="Fleet sections">
       <a href="{{ url_for('home.buses') }}">Buses</a><a href="{{ url_for('management.routes') }}">Routes</a><a href="{{ url_for('management.drivers') }}">Drivers</a>
     </nav>
-  {% else %}<span>{{ title }}</span>{% endif %}
+  {% else %}<nav class="section-tabs finance-tabs" aria-label="Finance sections">{% for key,label in [('general','General'),('collections','Collections'),('expenses','Expenses'),('balances','Balances')] %}<a href="{{ url_for('home.finance',view=key,period=period_mode|default('1m'),custom=custom_mode|default('all'),start=start|default(''),end=end|default('')) }}" {% if section|default('')==key %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}</nav>{% endif %}
   </div>
   {% endif %}
   <main id="main" tabindex="-1">{% for message in get_flashed_messages() %}<p class="notice" role="status">{{ message }}</p>{% endfor %}{% block content %}{% endblock %}</main>

@@ -5,7 +5,7 @@ from services.preset_service import get_default_collection_account_type
 from utils.validation import parse_non_negative_amount
 
 
-def get_accounts_for_management() -> list[dict]:
+def get_accounts_for_management(on_date=None) -> list[dict]:
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cursor:
             cursor.execute(
@@ -28,9 +28,11 @@ def get_accounts_for_management() -> list[dict]:
                     COUNT(ft.id) AS transaction_count
                 FROM financial_accounts fa
                 LEFT JOIN financial_transactions ft ON ft.account_id = fa.id
+                    AND (%s::date IS NULL OR ft.transaction_date <= %s)
                 GROUP BY fa.id
                 ORDER BY fa.id;
-                """
+                """,
+                (on_date, on_date),
             )
             return cursor.fetchall()
 
