@@ -62,7 +62,7 @@ def get_collection_coverage(collection_date: date, schedule_rules=None) -> dict:
     raise ValueError("Choose a Thursday or Sunday collection date, or use Backfill with one of those dates.")
 
 
-def _load_bus_rows(bus_ids: list[int]) -> list[dict]:
+def _load_bus_rows(bus_ids: list[int], on_date=None) -> list[dict]:
     if not bus_ids:
         return []
     with get_connection() as conn:
@@ -84,14 +84,16 @@ def _load_bus_rows(bus_ids: list[int]) -> list[dict]:
                     JOIN driver_employments de ON de.id = da.employment_id
                     JOIN drivers d ON d.id = de.driver_id
                     WHERE da.bus_id = b.id
-                      AND da.status = 'ACTIVE'
+                      AND ((%s::date IS NULL AND da.status = 'ACTIVE') OR
+                           (%s::date IS NOT NULL AND da.start_date <= %s AND (da.end_date IS NULL OR da.end_date >= %s)
+                            AND de.start_date <= %s AND (de.end_date IS NULL OR de.end_date >= %s)))
                     ORDER BY da.assignment_type = 'PERMANENT' DESC, da.start_date DESC
                     LIMIT 1
                 ) assigned ON TRUE
                 WHERE b.id = ANY(%s)
                 ORDER BY b.registration_number;
                 """,
-                (bus_ids,),
+                (on_date,on_date,on_date,on_date,on_date,on_date,bus_ids),
             )
             return cursor.fetchall()
 
@@ -100,12 +102,15 @@ def get_smart_cashing_preview(collection_date: date, schedule_rules=None) -> dic
     coverage = get_collection_coverage(collection_date, schedule_rules=schedule_rules)
     rates = get_cashing_rates_for_date(collection_date)
     active_days = bus_service.get_bus_active_day_counts(coverage["coverage_start"], coverage["coverage_end"])
-    buses = _load_bus_rows(list(active_days))
+    sunday_active = {}
+    if schedule_rules is not None and coverage["previous_sunday"]:
+        sunday_active = bus_service.get_bus_active_day_counts(coverage["previous_sunday"], coverage["previous_sunday"])
+    buses = _load_bus_rows(list(set(active_days) | set(sunday_active)), collection_date if schedule_rules is not None else None)
 
     bus_rows = []
     for bus in buses:
         normal_days = active_days.get(bus["id"], 0)
-        if normal_days <= 0:
+        if normal_days <= 0 and not sunday_active.get(bus["id"]):
             continue
         expected = Decimal(normal_days) * rates["NORMAL_DAY"]
         bus_rows.append(
@@ -387,9 +392,10 @@ def record_smart_cashing_collection(
     difference_classification: str = "MATCHED",
     cashing_mode: str = "STANDARD",
     notes: str | None = None,
+    schedule_rules=None,
 ) -> dict:
     collection_date = _coerce_date(collection_date, "Collection date")
-    coverage = get_collection_coverage(collection_date)
+    coverage = get_collection_coverage(collection_date, schedule_rules=schedule_rules)
     total_received = _money(total_received, "Actual received")
     unallocated_amount = _money(unallocated_amount, "Unallocated amount", allow_negative=True)
     if difference_classification not in DIFFERENCE_CLASSIFICATIONS:
@@ -495,9 +501,10 @@ def update_smart_cashing_collection(
     difference_classification: str = "MATCHED",
     cashing_mode: str = "ADJUSTED",
     notes: str | None = None,
+    schedule_rules=None,
 ) -> dict:
     collection_date = _coerce_date(collection_date, "Collection date")
-    coverage = get_collection_coverage(collection_date)
+    coverage = get_collection_coverage(collection_date, schedule_rules=schedule_rules)
     total_received = _money(total_received, "Actual received")
     unallocated_amount = _money(unallocated_amount, "Unallocated amount", allow_negative=True)
     if difference_classification not in DIFFERENCE_CLASSIFICATIONS:

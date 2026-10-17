@@ -1,27 +1,11 @@
 import os
 from pathlib import Path
-from threading import Thread
 from uuid import uuid4
 
 import pytest
 from playwright.sync_api import sync_playwright
-from werkzeug.serving import make_server
 
 pytestmark = [pytest.mark.integration, pytest.mark.browser]
-
-
-@pytest.fixture
-def stage2_server(stage2_app):
-    stage2_app.config.update(
-        SESSION_COOKIE_SECURE=False, SESSION_COOKIE_NAME="smartfleet_loopback_session"
-    )
-    server = make_server("127.0.0.1", 0, stage2_app, threaded=True)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield f"http://127.0.0.1:{server.server_port}"
-    server.shutdown()
-    thread.join(timeout=5)
-    server.server_close()
 
 
 @pytest.mark.parametrize("width,height", [(375, 667), (390, 844), (1366, 900)])

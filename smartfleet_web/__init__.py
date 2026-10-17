@@ -25,11 +25,13 @@ def create_app(test_config=None):
 
     from smartfleet_web.auth import bp as auth_bp
     from smartfleet_web.management import bp as management_bp
+    from smartfleet_web.recording import bp as recording_bp
     from smartfleet_web.views import bp as home_bp
 
     app.register_blueprint(auth_bp)
     app.register_blueprint(home_bp)
     app.register_blueprint(management_bp)
+    app.register_blueprint(recording_bp)
 
     @app.before_request
     def bind_database():

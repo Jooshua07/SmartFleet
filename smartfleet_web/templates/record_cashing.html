@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><h1>{{ title }}</h1><a class="record-link" href="/collections">History</a></div>
+{% if error %}<p role="alert" class="alert">{{ error }}</p>{% endif %}
+<form class="edit-form cashing-entry" method="post" data-direct="{{ 'true' if direct else 'false' }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="command_token" value="{{ command_token }}">
+<label for="collection_date">Collection date / backfill</label><div class="search-row"><input id="collection_date" name="collection_date" type="date" value="{{ data.collection_date }}" required><button type="button" id="load-cashing-date" class="icon-button" aria-label="Load date" title="Load date"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></div>
+{% if preview %}
+{% if not direct %}<p class="bus-meta">{{ preview.coverage_start }} to {{ preview.coverage_end }}</p>{% endif %}
+<label for="financial_account_id">Paid into</label><select id="financial_account_id" name="financial_account_id" required>{% for account in accounts %}<option value="{{ account.id }}" {% if account.id|string==data.get('financial_account_id') %}selected{% endif %}>{{ account.name }}</option>{% endfor %}</select>
+{% if direct %}<input type="hidden" name="mode" value="DIRECT">{% else %}
+<fieldset class="mode-picker"><legend>Cashing mode</legend>{% for value,label in [('STANDARD','Standard'),('ADJUSTED','Adjust buses')] %}<label class="check-label"><input type="radio" name="mode" value="{{ value }}" {% if data.get('mode','STANDARD')==value %}checked{% endif %}>{{ label }}</label>{% endfor %}</fieldset>
+{% endif %}
+<label for="bus_ids">Buses</label><select id="bus_ids" name="bus_ids" multiple required size="4">{% for bus in preview.buses %}<option value="{{ bus.id }}" {% if bus.id|string in data.bus_ids %}selected{% endif %}>{{ bus.registration_number }} | {{ bus.driver_name or 'No driver' }}</option>{% endfor %}</select>
+<div data-standard><label for="total_received">Total received (K)</label><input id="total_received" name="total_received" type="number" min="0" step="0.01" value="{{ data.get('total_received','') }}" required>
+<label for="classification">Difference</label><select id="classification" name="classification"><option value="UNKNOWN_DIFFERENCE">Unknown difference</option><option value="UNDERPERFORMANCE" {% if data.get('classification')=='UNDERPERFORMANCE' %}selected{% endif %}>Underperformance</option></select></div>
+<div data-adjusted><label class="check-label"><input id="same_amount" type="checkbox" name="same_amount" {% if data.get('same_amount')=='on' %}checked{% endif %}>Same normal amount for selected buses</label><div data-common><label for="common_amount">Amount per bus (K)</label><input id="common_amount" name="common_amount" type="number" min="0" step="0.01" value="{{ data.get('common_amount','') }}" required></div></div>
+{% for bus in preview.buses %}{% set bid=bus.id|string %}
+<fieldset class="cashing-bus history" data-bus="{{ bid }}" hidden><legend>{{ bus.registration_number }}</legend>
+<div data-adjusted><div data-individual><label for="amount_{{ bid }}">{{ bus.registration_number }} amount (K)</label><input id="amount_{{ bid }}" name="amount_{{ bid }}" type="number" step="0.01" min="0" value="{{ data.get('amount_'+bid,'') }}" required></div>
+{% if not direct %}<label for="days_{{ bid }}">Worked days</label><input id="days_{{ bid }}" name="days_{{ bid }}" type="number" min="0" max="{{ bus.normal_days }}" step="1" value="{{ data.get('days_'+bid,bus.normal_days) }}" required>{% endif %}
+</div>
+{% if preview.previous_sunday or direct %}<label class="check-label"><input type="checkbox" name="sunday_{{ bid }}" data-sunday {% if data.get('sunday_'+bid)=='on' %}checked{% endif %}>Add Sunday</label><div data-sunday-amount><label for="sunday_amount_{{ bid }}">Sunday amount (K)</label><input id="sunday_amount_{{ bid }}" name="sunday_amount_{{ bid }}" type="number" min="0" step="0.01" value="{{ data.get('sunday_amount_'+bid,bus.sunday_rate) }}" required></div>{% endif %}
+{% if not direct %}<div data-adjusted><label for="classification_{{ bid }}">Classification</label><select id="classification_{{ bid }}" name="classification_{{ bid }}">{% for value in classifications %}<option value="{{ value }}" {% if data.get('classification_'+bid,'MATCHED')==value %}selected{% endif %}>{{ value.replace('_',' ').title() }}</option>{% endfor %}</select>
+<label for="explanation_{{ bid }}">Reason if different</label><input id="explanation_{{ bid }}" name="explanation_{{ bid }}" value="{{ data.get('explanation_'+bid,'') }}" maxlength="500">
+<label for="responsible_{{ bid }}">Responsible person (confirmed unpaid)</label><input id="responsible_{{ bid }}" name="responsible_{{ bid }}" value="{{ data.get('responsible_'+bid,'') }}" maxlength="150"></div>{% endif %}
+</fieldset>{% endfor %}
+{% if not direct %}<div data-adjusted><label for="unallocated_amount">Unallocated amount (K)</label><input id="unallocated_amount" name="unallocated_amount" type="number" step="0.01" value="{{ data.get('unallocated_amount','0') }}"></div>{% endif %}
+<label for="notes">Notes</label><input id="notes" name="notes" value="{{ data.get('notes','') }}" maxlength="500">
+<label for="reason">Reason</label><input id="reason" name="reason" value="{{ data.get('reason','') }}" maxlength="500" required>
+<button class="primary" type="submit"><i data-lucide="save" aria-hidden="true"></i>Submit</button>
+{% endif %}
+</form>
+{% endblock %}

@@ -46,6 +46,7 @@ def isolated_app(isolated_config):
 @pytest.fixture
 def stage2_database(isolated_config):
     from smartfleet_web.management import TABLES, snapshot
+    from smartfleet_web.recording import FINANCIAL_TABLES
 
     env = dotenv_values(ROOT / ".env.flask.test.local")
     assert env["SMARTFLEET_WRITE_DB_USER"] == "smartfleet_flask_test_writer"
@@ -60,13 +61,29 @@ def stage2_database(isolated_config):
         "user": env["SMARTFLEET_WRITE_DB_USER"],
         "password": env["SMARTFLEET_WRITE_DB_PASSWORD"],
     }
-    tables = list(dict.fromkeys(table for group in TABLES.values() for table in group))
+    tables = list(
+        dict.fromkeys(
+            [
+                *(table for group in TABLES.values() for table in group),
+                *FINANCIAL_TABLES,
+                "expense_categories",
+            ]
+        )
+    )
     with psycopg.connect(**owner) as connection:
         before = snapshot(connection, tables)
         commands = set(connection.execute("SELECT actor,command_key FROM web_commands").fetchall())
     yield owner, writer
     # Restore only changes made to this isolated synthetic test fixture; never reset a database.
     order = [
+        "cashing_obligation_payments",
+        "cashing_obligations",
+        "remittances",
+        "remittance_collections",
+        "expense_allocations",
+        "expenses",
+        "financial_transactions",
+        "expense_categories",
         "bus_documents",
         "driver_assignments",
         "driver_salary_presets",
@@ -137,3 +154,21 @@ def stage2_database(isolated_config):
 @pytest.fixture
 def stage2_app(isolated_config, stage2_database):
     return create_app({**isolated_config, "WRITE_DB_SETTINGS": stage2_database[1]})
+
+
+@pytest.fixture
+def stage2_server(stage2_app):
+    from threading import Thread
+
+    from werkzeug.serving import make_server
+
+    stage2_app.config.update(
+        SESSION_COOKIE_SECURE=False, SESSION_COOKIE_NAME="smartfleet_loopback_session"
+    )
+    server = make_server("127.0.0.1", 0, stage2_app, threaded=True)
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_port}"
+    server.shutdown()
+    thread.join(timeout=5)
+    server.server_close()

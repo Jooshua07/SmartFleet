@@ -51,6 +51,14 @@ Durable command and actor-attributed before/after audit rows share the business 
 
 Tests restore only synthetic changes in the dedicated test database. Do not run its integration fixtures with concurrent pytest workers or another writer on that same test database. Browser artifacts remain ignored. The application is still single-process for owner sessions/throttling, and still cannot start with production configuration.
 
+## Stage 3 recording
+
+Run `.venv-flask/Scripts/python.exe scripts/setup_flask_stage3.py` only after Stage 2 provisioning. It verifies the two local isolated names/roles, extends explicit recording-table grants and initializes synthetic operating categories. No migration of the existing business schema is performed. Runtime writers still cannot alter schema, delete fleet records or change command/audit evidence.
+
+Finance links to Record Cashing, Record Expense, paginated histories and unpaid obligations. Cashing uses one multi-bus form and dated schedule rules for preview and commit, including historical status/assignment and optional Sunday work. Standard cashing retains estimated allocations and signed unallocated differences; Adjust buses records explicit allocations, explanations/classifications and optional confirmed unpaid responsibility. Historical DIRECT collections remain editable through their existing amount-based semantics. Corrections/deletions/settlements commit their actor-attributed before/after evidence atomically and preserve existing financial effects. Linked servicing/payroll/loan/owner records are not repurposed into ordinary expenses. Settlement payments remain OTHER-IN, not duplicated CASHING revenue.
+
+Only synthetic local data is used. Simultaneous legacy Streamlit writes against the same database are not supported by this isolated migration; production activation must retire the legacy writer or otherwise establish a separately reviewed shared command policy. Current command snapshots are bounded to 5,000 rows per relevant table; narrower evidence/version queries must be reviewed before a larger production workload reaches that limit. A safety limit is not a claim of unlimited scale.
+
 The initial in-memory owner-session registry is deliberately single-process: restart signs all devices out, logout revokes captured cookies, and capacity is bounded. Do not run multiple Gunicorn workers with this store. A shared session backend must be designed/tested before increasing processes. Login throttling is bounded and thread-safe in this process; production must also rate-limit at the trusted reverse proxy. No client-supplied forwarded address is trusted now.
 
 The shared database connection has a context-local settings override for Flask, with mandatory isolated DB/role validation and read-only/timeouts. Existing Streamlit calls keep their legacy environment behavior. No Flask request falls back to the Streamlit database credentials.

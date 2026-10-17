@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><h1>{{ title }}</h1><a class="button secondary" href="{{ url_for('recording.expense' if is_expense else 'recording.collection') }}"><i data-lucide="plus" aria-hidden="true"></i>Record</a></div>
+{% for row in rows %}<article class="register-row">
+<h2>{{ row.description if is_expense else row.collection_date }}</h2><p>{{ row.expense_date if is_expense else row.cashing_mode }} | K {{ '{:,.2f}'.format(row.amount if is_expense else row.total_amount) }}</p>
+{% if is_expense %}<p>{{ row.label }} | {{ row.vendor_name or '' }} | {{ row.reference_number or '' }}</p>{% else %}<p>Expected K {{ row.expected_total }} | Unallocated K {{ row.unallocated_amount }}</p>{% endif %}
+<div class="form-actions"><a class="record-link" href="{{ url_for('recording.expense' if is_expense else 'recording.collection',record_id=row.id) }}"><i data-lucide="pencil" aria-hidden="true"></i>Edit</a><a class="record-link" href="{{ url_for('recording.delete',kind='expense' if is_expense else 'collection',record_id=row.id) }}"><i data-lucide="trash-2" aria-hidden="true"></i>Delete</a></div>
+</article>{% else %}<p class="empty-state">No records.</p>{% endfor %}
+<nav class="pagination" aria-label="History pages">{% if page>1 %}<a href="?page={{ page-1 }}">Previous</a>{% endif %}<span>Page {{ page }}</span>{% if has_next %}<a href="?page={{ page+1 }}">Next</a>{% endif %}</nav>
+{% endblock %}

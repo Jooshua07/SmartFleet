@@ -47,7 +47,7 @@ def test_runtime_writer_is_restricted(stage2_database):
         "UPDATE web_command_audit SET reason='x' WHERE false",
         "DELETE FROM web_commands WHERE false",
         "CREATE TABLE forbidden_probe(id int)",
-        "INSERT INTO financial_transactions(account_id) VALUES (0)",
+        "INSERT INTO expense_categories(name) VALUES ('Not allowed')",
     ):
         with (
             pytest.raises(psycopg.errors.InsufficientPrivilege),

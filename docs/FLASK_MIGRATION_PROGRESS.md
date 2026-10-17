@@ -126,9 +126,24 @@ Status: **PASSED**. Stage 1 checkpoint **66eed29** was committed and pushed to m
 - Verified master and streamlit-final both still point to **46c76438b53b12f7779b89d0e2e74f72c6eb0d4f**. No production activation, real financial data change or existing business schema alteration occurred.
 - Implementation checkpoint: **1774908204852226db358ed88b600a710c39b7bf**, successfully pushed to origin/migration/flask. This follow-up documentation checkpoint records that immutable implementation hash. Stage 3 is not started in this Stage 2 request.
 
-## Remaining After Stage 2
+## Stage 3 - Financial recording
 
-3. Expenses, cashing/backfill, corrections and obligations.
+Status: **PASSED**. Resumed from clean migration/flask at 69d144f; the interrupted scheduled start had made no application changes. Usage at scheduled start was 0% of the five-hour window and 18% weekly.
+
+- Added owner/CSRF-protected expense recording, paginated history, editing and confirmed deletion with vendor/reference, existing category restrictions and servicing-linked guards. Existing services and financial effects are reused inside durable commands.
+- Added one cashing form with multi-select buses, Standard/Adjust buses, equal/separate amounts, worked-day adjustments, optional Sunday amounts, classifications, confirmed obligations and historical backfill. Selected-date rules and historical activation are recomputed inside the command transaction; direct historical collections use their existing editor semantics. Success clears financial inputs while retaining the cashing date.
+- Added collection history/correction/deletion and obligation partial/full settlements/history. Existing Airtel-only destinations, OTHER-IN settlement treatment, obligation correction locks, allocation provenance and signed unallocated differences are retained.
+- Version-controlled isolated setup extends writer grants only to recording tables in smartfleet_flask_dev/test and initializes three synthetic operating categories. No production/source access or business schema changes. Audit/command tables remain append-only to the runtime writer.
+- Significant diagnosis: a concurrency test exposed that cashing included CSRF transport tokens in its intent hash. Removed transport tokens from financial intent, retaining CSRF validation and owner authentication; exact same-key retries across owner sessions then passed. Existing collection mode/receipt/unallocated values are retained on GET, avoiding a silent Standard-to-Adjusted correction. Historical labels now resolve driver assignments on the collection date; Sunday-only historical activity is eligible without inventing normal worked days.
+- Initial integration slice: 16 cases passed and one concurrency case failed before the intent-hash fix; focused concurrency rerun: 1 passed. A clearing assertion incorrectly searched the whole HTML for 'selected' and matched label text; scoped it to the actual bus-select options, retaining the no-selected-bus requirement. No valid assertion was weakened.
+- Stage 3 browser journeys: **3 passed in 65.43s**, at 375x667,390x844,1366x900. Actual multiple-bus/equal-amount recording, clearing, expense/reference entry and confirmed deletion exercised. Screenshot inspected. Focused financial authorization/CSRF tests: **13 passed in 10.03s**.
+- Legacy Streamlit regressions with workspace TEMP/TMP and read-only PGOPTIONS: **97 passed in 45.618s**, excluding the live connection test. Dependency audit: no known vulnerabilities. Package consistency and Ruff pass.
+- Full combined acceptance: **156 passed in 510.29s**, running tests/web and tests/integration with workspace TEMP/TMP and Edge. Subsequently added authorization cases passed separately (**13 passed**); final signed-difference, commit-failure and audit-insertion-failure cases passed separately (**4 passed,21 deselected in 24.80s**). Deselected cases were already covered by the combined run and are not counted as new passes. These are separate runs, not a claimed single 173-case run.
+- Ruff check/format, package consistency, dependency audit, whitespace checks and generated-secret review passed. All new browser journeys passed; legacy 97-case regression passed. Commit-time and audit-insertion failures left zero financial, command and audit rows. Same receipt replayed after a new Python process produced one ledger receipt only.
+- Stage 3 is eligible for its reviewed checkpoint/push. Exact implementation SHA will be recorded in Stage 4's progress entry after the checkpoint exists. Stage 4 implementation has not begun before this acceptance gate.
+
+## Remaining After Stage 3
+
 4. Dashboard, finance, periods and reconciling Bus Accounts.
 5. Payroll, business loans and owner money.
 6. Servicing, reminders, reports/exports, backups, help and remaining parity.
