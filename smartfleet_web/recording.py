@@ -7,7 +7,7 @@ import psycopg
 from flask import Blueprint, abort, current_app, flash, redirect, render_template, request, url_for
 from psycopg.rows import dict_row
 
-from database.connection import get_connection
+from database.connection import get_connection, shared_transaction
 from services import bus_service, cashing_service, expense_service, preset_service
 from services import smart_cashing_service as cashing
 from smartfleet_web.auth import owner_required
@@ -56,9 +56,9 @@ def token_for(action):
         return form_token(action, state(connection))
 
 
-def command(action, payload, token, operation):
+def command(action, payload, token, operation, reason=None):
     decoded = decode_token(token, action)
-    reason = request.form.get("reason", "").strip()
+    reason = request.form.get("reason", "").strip() if reason is None else reason
     if not reason or len(reason) > 500:
         raise ValueError("Enter a reason of 1 to 500 characters.")
     if not current_app.config.get("WRITE_DB_SETTINGS"):
@@ -356,6 +356,10 @@ def allocations(data, preview, direct=False):
 @bp.route("/collections/<int:record_id>/edit", methods=["GET", "POST"])
 @owner_required
 def collection(record_id):
+    if not record_id:
+        from smartfleet_web.cashing_entry import complete_collection
+
+        return complete_collection()
     existing = None
     if record_id:
         try:
@@ -478,6 +482,20 @@ def collection(record_id):
         direct=direct,
         classifications=sorted(cashing.DIFFERENCE_CLASSIFICATIONS),
     ), status if request.method == "POST" else 200
+
+
+@bp.get("/collections/<int:record_id>/receipt")
+@owner_required
+def receipt(record_id):
+    try:
+        with shared_transaction(current_app.config["DB_SETTINGS"]) as connection:
+            connection.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            saved = cashing_service.get_cashing_collection(record_id)
+    except ValueError:
+        abort(404)
+    return render_template(
+        "cashing_receipt.html", title="Recorded Cashing", active="finance", **saved
+    )
 
 
 @bp.route("/delete/<kind>/<int:record_id>", methods=["GET", "POST"])

@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-title"><h1>Record Cashing</h1><a class="record-link" href="/collections">History</a></div>
+{% if error %}<p role="alert" class="alert">{{ error }}</p>{% endif %}
+<form class="edit-form complete-cashing" method="post" data-loaded-date="{{ data.collection_date }}">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="command_token" value="{{ command_token }}">
+<label for="collection_date">Collection date / backfill</label><div class="search-row"><input id="collection_date" name="collection_date" type="date" value="{{ data.collection_date }}" required><button type="button" id="load-invoice-date" class="icon-button" aria-label="Load date" title="Load date"><i data-lucide="refresh-cw" aria-hidden="true"></i></button></div>
+{% if preview %}<p class="bus-meta">Coverage: {{ preview.coverage_start }} to {{ preview.coverage_end }}</p>
+<fieldset class="mode-picker segmented"><legend>Cashing mode</legend>{% for value,label in [('STANDARD','Standard'),('ADJUSTED','Adjusted Buses')] %}<label class="check-label"><input type="radio" name="mode" value="{{ value }}" {% if data.get('mode','STANDARD')==value %}checked{% endif %}>{{ label }}</label>{% endfor %}</fieldset>
+<div class="cashing-invoice" aria-label="Collection invoice">
+<div class="invoice-heading"><span>Registration</span><span>Expected</span><span>Actual</span></div>
+{% for bus in preview.buses %}{% set bid=bus.id|string %}<article class="cashing-choice" data-id="{{ bid }}" data-days="{{ bus.normal_days }}" data-normal-rate="{{ (bus.normal_daily_rate*100)|int }}" data-sunday-rate="{{ (bus.sunday_rate*100)|int }}" data-standard="{{ (bus.expected_amount*100)|int }}">
+<div class="invoice-row"><strong>{{ bus.registration_number }}</strong><span data-expected>K {{ '{:,.2f}'.format(bus.expected_amount) }}</span><span data-actual>K {{ '{:,.2f}'.format(bus.expected_amount) }}</span></div>
+<label class="check-label adjust-trigger" data-adjust-toggle {% if data.mode!='ADJUSTED' %}hidden{% endif %}><input type="checkbox" name="adjust_ids" value="{{ bid }}" {% if bid in data.adjust_ids %}checked{% endif %}><i data-lucide="pencil" aria-hidden="true"></i>Adjust {{ bus.registration_number }}</label>
+<div data-adjust-fields {% if data.mode!='ADJUSTED' or bid not in data.adjust_ids %}hidden{% endif %}>
+<label for="amount_{{ bid }}">{{ bus.registration_number }} actual normal amount (K)</label><input id="amount_{{ bid }}" name="amount_{{ bid }}" type="number" step="0.01" min="0" inputmode="decimal" value="{{ data.get('amount_'+bid,'') }}" required>
+<details><summary>Worked days / Sunday</summary><label for="days_{{ bid }}">Worked days</label><input id="days_{{ bid }}" name="days_{{ bid }}" type="number" min="0" max="{{ bus.normal_days }}" step="1" value="{{ data.get('days_'+bid,bus.normal_days) }}" required>
+{% if preview.previous_sunday %}<label class="check-label"><input type="checkbox" name="sunday_{{ bid }}" data-add-sunday {% if data.get('sunday_'+bid)=='on' %}checked{% endif %}>Add Sunday</label><div data-sunday-input {% if data.get('sunday_'+bid)!='on' %}hidden{% endif %}><label for="sunday_amount_{{ bid }}">Sunday amount (K)</label><input id="sunday_amount_{{ bid }}" name="sunday_amount_{{ bid }}" type="number" min="0" step="0.01" value="{{ data.get('sunday_amount_'+bid,bus.sunday_rate) }}" required></div>{% endif %}</details>
+<div data-difference-controls><label for="classification_{{ bid }}">Classification</label><select id="classification_{{ bid }}" name="classification_{{ bid }}">{% for value in classifications %}<option value="{{ value }}" {% if data.get('classification_'+bid,'MATCHED')==value %}selected{% endif %}>{{ value.replace('_',' ').title() }}</option>{% endfor %}</select>
+<label for="explanation_{{ bid }}">Reason if different</label><input id="explanation_{{ bid }}" name="explanation_{{ bid }}" value="{{ data.get('explanation_'+bid,'') }}" maxlength="500">
+<div data-responsibility><label for="responsible_{{ bid }}">Responsible person (confirmed unpaid)</label><input id="responsible_{{ bid }}" name="responsible_{{ bid }}" value="{{ data.get('responsible_'+bid,'') }}" maxlength="150"></div></div>
+</div></article>{% else %}<p class="alert">No eligible buses were active during this coverage. Check the date and bus activity history.</p>{% endfor %}
+<div class="invoice-total"><strong>Total received</strong><output id="invoice-total" aria-live="polite">K {{ '{:,.2f}'.format(preview.expected_total) }}</output></div></div>
+<label for="notes">Comment (optional)</label><input id="notes" name="notes" value="{{ data.get('notes','') }}" maxlength="500">
+<button class="primary cashing-submit" type="submit" {% if not preview.buses %}disabled{% endif %}><i data-lucide="save" aria-hidden="true"></i>Submit Cashing</button>
+{% endif %}</form><script defer src="{{ url_for('static',filename='cashing-entry.js') }}"></script>
+{% endblock %}

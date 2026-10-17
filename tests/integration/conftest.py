@@ -74,6 +74,9 @@ def stage2_database(isolated_config):
                 "driver_salaries",
                 "salary_advance_recoveries",
                 "salary_deduction_allocations",
+                "maintenance",
+                "maintenance_schedules",
+                "reminders",
             ]
         )
     )
@@ -91,6 +94,9 @@ def stage2_database(isolated_config):
         "driver_deductions",
         "loan_repayments",
         "owner_loan_transactions",
+        "reminders",
+        "maintenance",
+        "maintenance_schedules",
         "cashing_obligation_payments",
         "cashing_obligations",
         "remittances",

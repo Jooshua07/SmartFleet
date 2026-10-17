@@ -16,6 +16,7 @@ from tests.web.test_foundation import csrf, login
         "/obligations/1",
         "/delete/expense/1",
         "/collections/1/edit",
+        "/collections/1/receipt",
     ],
 )
 def test_financial_pages_require_owner_before_database(client, path):

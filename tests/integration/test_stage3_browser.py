@@ -19,23 +19,23 @@ def test_cashing_and_expense_real_entry(stage2_server, width, height):
         page.get_by_label("Password", exact=True).fill("browser-synthetic-passphrase")
         page.get_by_role("button", name="Sign in").click()
         page.goto(stage2_server + "/record-cashing?date=2026-10-08")
-        assert page.locator("form.cashing-entry").count() == 1
-        assert page.locator(".cashing-bus:visible").count() == 0
-        page.get_by_label("Buses", exact=True).select_option(label=["DEMO101", "DEMO102"])
-        page.get_by_label("Adjust buses", exact=True).check()
-        assert page.locator(".cashing-bus:visible").count() == 2
-        page.get_by_label("Same normal amount for selected buses").check()
-        page.get_by_label("Amount per bus (K)").fill("1800")
-        assert page.get_by_label("DEMO101 amount (K)").is_hidden()
-        page.get_by_label("Reason", exact=True).fill("Browser cashing")
+        assert page.locator("form.complete-cashing").count() == 1
+        assert page.locator("[data-adjust-fields]:visible").count() == 0
+        page.get_by_label("Adjusted Buses", exact=True).check()
+        for bus in ("DEMO101", "DEMO102"):
+            page.get_by_label("Adjust " + bus, exact=True).check()
+            page.get_by_label(bus + " actual normal amount (K)").fill("1800")
+        assert page.locator("[data-adjust-fields]:visible").count() == 2
+        page.get_by_label("Comment (optional)").fill("Browser cashing")
         assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
         artifacts = Path(".local/browser")
         artifacts.mkdir(parents=True, exist_ok=True)
         page.screenshot(path=str(artifacts / f"stage3-cashing-{width}.png"), full_page=True)
-        page.get_by_role("button", name="Submit", exact=True).click()
-        page.wait_for_url(stage2_server + "/record-cashing?date=2026-10-08")
+        page.get_by_role("button", name="Submit Cashing", exact=True).click()
+        page.wait_for_url("**/receipt")
         assert page.get_by_role("status").get_by_text("Cashing saved.").is_visible()
-        assert page.locator("#bus_ids option:checked").count() == 0
+        page.get_by_role("link", name="Record another", exact=True).click()
+        assert page.locator('[name="adjust_ids"]:checked').count() == 0
         page.goto(stage2_server + "/record-expense")
         page.get_by_label("Expense date", exact=True).fill("2026-10-01")
         page.get_by_label("Category", exact=True).select_option(label="Bus - Maintenance")

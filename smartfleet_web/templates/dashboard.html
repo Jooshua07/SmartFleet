@@ -12,6 +12,6 @@
 {{ chart('bars','Bus revenue vs attributed costs') }}
 {{ bus_table(fleet.buses) }}
 <a class="record-link" href="/bus-accounts">Bus Accounts<i data-lucide="chevron-right" aria-hidden="true"></i></a>
-<section class="history"><h2>Alerts and reminders</h2>{% for row in servicing_alerts|default([]) %}<p>{{ row.registration_number }} | {{ row.next_due_date }} | {{ row.level }}</p>{% endfor %}{% for row in reminders|default([]) %}<p>{{ row.title }} | {{ row.due_date }}</p>{% else %}<p class="bus-meta">No pending reminders.</p>{% endfor %}</section>
+<section class="history"><h2>Alerts and reminders</h2><a href="/reminders">All reminders</a>{% for row in servicing_alerts|default([]) %}<p><a href="/servicing">{{ row.registration_number }} | {{ row.next_due_date }} | {{ row.level }}</a></p>{% endfor %}{% for row in reminders|default([]) %}<p>{{ row.title }} | {{ row.due_date }}</p>{% else %}<p class="bus-meta">No pending reminders.</p>{% endfor %}</section>
 <section class="history"><h2>Recent Activity</h2>{% for row in activity|default([]) %}<article class="register-row"><h2>{{ row.description or 'Business transaction' }}</h2><p>{{ row.transaction_date }} | K {{ row.amount }}</p></article>{% else %}<p class="bus-meta">No recorded activity yet.</p>{% endfor %}</section>
 {% endblock %}

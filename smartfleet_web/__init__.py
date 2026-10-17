@@ -26,7 +26,9 @@ def create_app(test_config=None):
     from smartfleet_web.auth import bp as auth_bp
     from smartfleet_web.management import bp as management_bp
     from smartfleet_web.money import bp as money_bp
+    from smartfleet_web.operations import bp as operations_bp
     from smartfleet_web.recording import bp as recording_bp
+    from smartfleet_web.support import bp as support_bp
     from smartfleet_web.views import bp as home_bp
 
     app.register_blueprint(auth_bp)
@@ -34,6 +36,8 @@ def create_app(test_config=None):
     app.register_blueprint(management_bp)
     app.register_blueprint(recording_bp)
     app.register_blueprint(money_bp)
+    app.register_blueprint(operations_bp)
+    app.register_blueprint(support_bp)
 
     @app.before_request
     def bind_database():

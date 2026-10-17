@@ -44,11 +44,12 @@ def test_stage5_money_and_simplified_forms(stage2_server, money_data, width, hei
         assert page.get_by_label("Bus", exact=True).is_hidden()
         page.goto(stage2_server + "/record-cashing?date=2026-10-08")
         assert page.get_by_label("Paid into", exact=True).count() == 0
-        page.get_by_label("Buses", exact=True).select_option(label="DEMO101")
-        card = page.locator(".cashing-bus:visible")
+        page.get_by_label("Adjusted Buses", exact=True).check()
+        page.get_by_label("Adjust DEMO101", exact=True).check()
+        card = page.locator(".cashing-choice.is-adjusted")
         assert card.count() == 1
         assert card.evaluate("e=>getComputedStyle(e).borderTopStyle") == "solid"
-        assert "|" not in page.locator("#bus_ids").inner_text()
+        assert "|" not in card.locator("strong").inner_text()
         page.goto(stage2_server + "/money/advance")
         page.get_by_label("Amount (K)", exact=True).fill("200")
         page.get_by_label("Date", exact=True).fill("2026-10-10")

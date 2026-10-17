@@ -60,7 +60,15 @@ def bus_accounts(bus_id):
 @bp.get("/more")
 @owner_required
 def more():
-    return render_template("more.html", title="More", active="more")
+    from services.validation_service import get_data_validation_warnings
+    from smartfleet_web.private_backups import latest_age
+
+    warnings = get_data_validation_warnings(
+        lambda: latest_age(
+            current_app.config["DB_SETTINGS"], current_app.config.get("PRIVATE_BACKUP_ROOT")
+        )
+    )
+    return render_template("more.html", title="More", active="more", warnings=warnings)
 
 
 @bp.get("/health/live")

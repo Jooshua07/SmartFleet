@@ -40,6 +40,17 @@ if (periodPicker) {
 }
 
 const cashingForm = document.querySelector('.cashing-entry');
+const servicingTotal = document.querySelector('#servicing-total');
+if (servicingTotal) {
+  const form = servicingTotal.closest('form');
+  function updateServicingTotal() {
+    const total = ['labour', 'transport', 'other'].reduce((sum, name) => sum + Math.round((Number(form.elements[name].value) || 0) * 100), 0);
+    servicingTotal.textContent = 'Total: K ' + (total / 100).toFixed(2);
+    form.elements.payment_date.required = total > 0;
+  }
+  form.addEventListener('input', updateServicingTotal);
+  updateServicingTotal();
+}
 if (cashingForm) {
   document.querySelector('#load-cashing-date').addEventListener('click', () => {
     const value = document.querySelector('#collection_date').value;

@@ -34,7 +34,11 @@ def app_config(owner_hash):
 
 
 @pytest.fixture
-def app(app_config):
+def app(app_config, monkeypatch):
+    # Unit navigation/auth tests have no database; real setup checks run in integration tests.
+    monkeypatch.setattr(
+        "services.validation_service.get_data_validation_warnings", lambda *args: []
+    )
     return create_app(app_config)
 
 

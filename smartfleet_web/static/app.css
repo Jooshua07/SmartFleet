@@ -125,6 +125,26 @@ td a,th a { color: #1168d4; }
 .finance-tabs a[aria-current] { color: #1168d4; }
 .balance-now { margin-bottom: 24px; max-width: 330px; }
 .balance-now .metric-label { min-height: 20px; }
+.report-section { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.report-section summary { cursor: pointer; font-weight: 650; padding: 8px 0; }
+.report-section li { margin: 10px 0; line-height: 1.55; }
+.reminder-row { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.reconciliation-equation { overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+#servicing-total { display: block; margin: 16px 0; font-weight: 700; }
+.cashing-invoice { margin: 18px 0; }
+.invoice-heading, .invoice-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); gap: 8px; align-items: start; }
+.invoice-heading { color: var(--muted); font-size: 12px; padding: 10px 8px; }
+.invoice-row { padding: 12px 8px; font-size: 13px; }
+.invoice-row>* { overflow-wrap: anywhere; min-width: 0; }
+.invoice-heading>*:not(:first-child), .invoice-row>*:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.cashing-choice { border-bottom: 1px solid var(--line); padding: 4px 0; }
+.cashing-choice:has(.adjust-trigger:not([hidden])) { border: 1px solid var(--line); border-radius: 6px; margin: 12px 0; padding: 8px; }
+.cashing-choice.is-adjusted { border-color: #1479f6; background: #f6faff; }
+.adjust-trigger { min-height: 44px; cursor: pointer; }
+.adjust-trigger svg { width: 16px; height: 16px; }
+.invoice-total { display: flex; justify-content: space-between; gap: 12px; border-top: 2px solid var(--line); padding: 16px 8px; font-variant-numeric: tabular-nums; }
+.invoice-total>* { min-width: 0; overflow-wrap: anywhere; }
+.cashing-submit { width: 100%; margin-top: 20px; min-height: 48px; }
 :focus-visible { outline: 3px solid #7bb5ff; outline-offset: 3px; }
 .skip-link { position: fixed; top: -70px; left: 8px; background: #fff; padding: 12px; z-index: 9; }
 .skip-link:focus { top: 8px; }

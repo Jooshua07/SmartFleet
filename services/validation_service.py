@@ -3,10 +3,10 @@ from services.account_service import get_negative_balance_warnings
 from services.backup_service import latest_backup_age_hours
 
 
-def get_data_validation_warnings() -> list[str]:
+def get_data_validation_warnings(backup_age_provider=None) -> list[str]:
     warnings = []
 
-    backup_age = latest_backup_age_hours()
+    backup_age = (backup_age_provider or latest_backup_age_hours)()
     if backup_age is None:
         warnings.append("No database backup has been created yet.")
     elif backup_age > 24:

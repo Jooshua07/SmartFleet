@@ -1,5 +1,4 @@
 import json
-import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -40,6 +39,7 @@ def cash_form(client, owner, mode="STANDARD", ids=None, day="2026-10-08"):
         "collection_date": day,
         "financial_account_id": str(account),
         "bus_ids": [str(b) for b in ids],
+        "adjust_ids": [str(b) for b in ids] if mode == "ADJUSTED" else [],
         "mode": mode,
         "total_received": str(1800 * len(ids)),
         "reason": "Synthetic collection",
@@ -115,12 +115,13 @@ def test_one_multiple_buses_sunday_and_clearing(stage2_app, stage2_database, mod
     with psycopg.connect(**owner) as connection:
         assert connection.execute(
             "SELECT count(*),sum(actual_amount) FROM remittances"
-        ).fetchone() == (count, count * (2100 if sunday else 1800))
+        ).fetchone() == (3, 5400 + (count * 300 if sunday else 0))
         assert connection.execute("SELECT count(*) FROM financial_transactions").fetchone()[0] == 1
     page = client.get("/record-cashing?date=2026-10-08", base_url=BASE)
-    bus_select = re.search(rb'<select id="bus_ids".*?</select>', page.data, re.S)[0]
-    assert b" selected" not in bus_select
-    assert b'name="total_received" type="number" min="0" step="0.01" value=""' in page.data
+    assert b'<select id="bus_ids"' not in page.data
+    assert b'name="total_received"' not in page.data
+    assert b'name="adjust_ids" value="1" checked' not in page.data
+    assert b'name="mode" value="STANDARD" checked' in page.data
 
 
 @pytest.mark.parametrize(
@@ -143,7 +144,7 @@ def test_invalid_cashing_rolls_back_and_retains_draft(stage2_app, stage2_databas
     values = cash_form(client, owner, "ADJUSTED")
     bid = values["bus_ids"][0]
     if change == "missing_bus":
-        values["bus_ids"] = []
+        values["adjust_ids"] = [""]
     elif change == "missing_amount":
         values[f"amount_{bid}"] = ""
     elif change == "nan":
@@ -151,11 +152,13 @@ def test_invalid_cashing_rolls_back_and_retains_draft(stage2_app, stage2_databas
     elif change == "scale":
         values[f"amount_{bid}"] = "1.001"
     elif change == "invalid_bus":
-        values["bus_ids"] = ["999999"]
+        values["adjust_ids"] = ["999999"]
     elif change == "excess_days":
         values[f"days_{bid}"] = "4"
     elif change == "missing_reason":
-        values["reason"] = ""
+        values[f"amount_{bid}"] = "1000"
+        values[f"classification_{bid}"] = "UNDERPERFORMANCE"
+        values[f"explanation_{bid}"] = ""
     elif change == "wrong_weekday":
         values["collection_date"] = "2026-10-05"
     else:
@@ -291,7 +294,7 @@ def test_new_collection_day_and_sunday_only_historical_bus(stage2_app, stage2_da
     with psycopg.connect(**owner) as connection:
         assert connection.execute(
             "SELECT coverage_start,coverage_end,total_amount FROM remittance_collections"
-        ).fetchone() == (date(2026, 10, 5), date(2026, 10, 5), 600)
+        ).fetchone() == (date(2026, 10, 5), date(2026, 10, 5), 1800)
 
 
 def test_sunday_only_activation_and_inactive_normal_days(stage2_app, stage2_database):
@@ -301,15 +304,21 @@ def test_sunday_only_activation_and_inactive_normal_days(stage2_app, stage2_data
         bus = bus_service.create_bus("SUNDAY-TEST", route, date_acquired=date(2026, 10, 4))
         bus_service.set_bus_status(bus["id"], "INACTIVE", date(2026, 10, 5), "Sunday only")
     client = login(stage2_app)
-    values = cash_form(client, owner, ids=[bus["id"]])
+    values = cash_form(client, owner, mode="ADJUSTED", ids=[bus["id"]])
     values.update(
-        {"total_received": "300", f"sunday_{bus['id']}": "on", f"sunday_amount_{bus['id']}": "300"}
+        {
+            f"amount_{bus['id']}": "0",
+            f"days_{bus['id']}": "0",
+            f"sunday_{bus['id']}": "on",
+            f"sunday_amount_{bus['id']}": "300",
+        }
     )
     response = post(client, "/record-cashing", values)
     assert response.status_code == 303, response.data.decode()
     with psycopg.connect(**owner) as connection:
         assert connection.execute(
-            "SELECT normal_days,sunday_days,actual_amount FROM remittances"
+            "SELECT normal_days,sunday_days,actual_amount FROM remittances WHERE bus_id=%s",
+            (bus["id"],),
         ).fetchone() == (0, 1, 300)
 
 
@@ -389,9 +398,30 @@ def test_standard_signed_difference_preserves_actual_receipt(
 ):
     owner, _ = stage2_database
     client = login(stage2_app)
+    # The approved new-entry invoice no longer accepts an arbitrary aggregate receipt.
+    # Preserve coverage of signed legacy differences through the historical correction editor.
+    from services import smart_cashing_service
+    from services.preset_service import list_cashing_schedule_rules
+
+    account, _, buses = identifiers(owner)
+    with shared_transaction(owner):
+        rules = list_cashing_schedule_rules()
+        preview = smart_cashing_service.get_smart_cashing_preview(date(2026, 10, 8), rules)
+        allocation = smart_cashing_service.build_standard_allocations(preview, buses[:1], [], 1800)
+        allocation.pop("expected_total")
+        created = smart_cashing_service.record_smart_cashing_collection(
+            date(2026, 10, 8),
+            account,
+            total_received=1800,
+            cashing_mode="STANDARD",
+            schedule_rules=rules,
+            **allocation,
+        )
+    path = f"/collections/{created['id']}/edit"
     values = cash_form(client, owner)
+    values.update(form(client, path))
     values["total_received"] = received
-    assert post(client, "/record-cashing", values).status_code == 303
+    assert post(client, path, values).status_code == 303
     with psycopg.connect(**owner) as connection:
         assert connection.execute(
             "SELECT unallocated_amount,difference_classification FROM remittance_collections"
@@ -440,11 +470,20 @@ def test_cash_receipt_and_audit_rollback_on_commit_failure(
             )
 
 
-def test_financial_audit_insert_failure_rolls_back_receipt(stage2_app, stage2_database):
+def test_financial_audit_insert_failure_rolls_back_receipt(
+    stage2_app, stage2_database, monkeypatch
+):
+    from smartfleet_web import recording
+
     owner, _ = stage2_database
     client = login(stage2_app)
     values = cash_form(client, owner)
-    values["reason"] = "Invalid audit text\x00"
+    original = recording.command
+
+    def invalid_audit(action, payload, token, operation, reason=None):
+        return original(action, payload, token, operation, reason="Invalid audit text\x00")
+
+    monkeypatch.setattr("smartfleet_web.cashing_entry.command", invalid_audit)
     assert post(client, "/record-cashing", values).status_code == 409
     with psycopg.connect(**owner) as connection:
         assert connection.execute("SELECT count(*) FROM financial_transactions").fetchone()[0] == 0
