@@ -188,3 +188,8 @@ Status: **PASSED**.
 - Stop after this stage. Stage 5: payroll, business loans and owner-money screens. Stage 6: servicing, reminders, reports/exports, isolated backups, help and remaining parity. Stage 7: full parity verification, CI and deployment preparation, not production activation.
 - Home alerts/reminders read the existing services; their editing workflows are not claimed as migrated. Report exports and opening/closing-balance report screens remain Stage 6. No real financial history has been imported into this private preview.
 - Single-process owner sessions, bounded command snapshots and production isolation restrictions documented above remain. No production-ready or full-parity claim is made. The preview link is PC-only HTTP, not a phone/public link.
+
+### Published checkpoint
+
+- Stage 4 implementation: **52b82118a8ccbee9791f7a2a3f4165d6be96dc27**, successfully pushed to origin/migration/flask. Stage 3 remains preserved at **3ba7031e46de8f18b8023278c3144f108aa67959**. This documentation-only follow-up records the immutable implementation hash.
+- Working tree was clean and synchronized after the implementation push. Final usage check: **46% five-hour / 25% weekly**. No required test/security/tool session remains running; only the intentional loopback preview remains available. Stage 5 has not started.
